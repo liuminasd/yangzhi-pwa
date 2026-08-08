@@ -12,6 +12,7 @@ import Compressor from '../utils/compress.js';
 import Registry from '../skills/registry.js';
 import API from '../api.js';
 import Config from '../config.js';
+import AIProfile from '../profile.js';
 
 const ChatView = {
   currentConvId: null,
@@ -347,7 +348,7 @@ const ChatView = {
       }
 
     } catch (error) {
-      console.error('发送消息失败', error);
+      console.error('发送消息失败', error && error.message || '未知错误');
       Toast.error(`发送失败：${error.message}`);
       // 移除空的流式气泡，显示重试按钮
       if (this.streamBubble && !this.streamBuffer) {
@@ -374,14 +375,17 @@ const ChatView = {
   async _buildContext(userMessage) {
     const messages = [];
 
-    // 1. 基础系统提示词
-    let systemPrompt = `你是一个温暖、有记忆的AI聊天伴侣。你叫"小忆"。
-你的特点：
+    // 1. 人物档案系统提示词
+    const profilePrompt = AIProfile.buildSystemPrompt();
+    let systemPrompt = `${profilePrompt}
+
+你的核心能力：
+- 记住用户告诉你的关于他们的事情（长期记忆）
 - 像朋友一样自然亲切地聊天
-- 记住用户告诉你的关于他们的事情
 - 回复简洁有温度，通常2-5句话
 - 用中文回复，适当使用表情符号
 - 当用户主动问起时，可以回顾之前记住的信息
+- 用户说"记住xxx"时，你会记住这条信息
 
 当前时间：${new Date().toLocaleString('zh-CN')}`;
 

@@ -13,6 +13,8 @@ const ASSETS_TO_CACHE = [
   './css/skills.css',
   './css/components.css',
   './js/config.js',
+  './js/profile.js',
+  './js/profile-sync.js',
   './js/app.js',
   './js/api.js',
   './js/utils/token.js',

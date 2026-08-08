@@ -192,7 +192,8 @@ class ApiError extends Error {
     } catch {}
     super(message);
     this.status = status;
-    this.body = body;
+    // 不暴露原始响应体，防止密钥等敏感信息泄露
+    this.sanitizedBody = message;
   }
 }
 

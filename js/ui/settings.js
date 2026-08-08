@@ -5,6 +5,8 @@
 import Render from './render.js';
 import Toast from './toast.js';
 import Config from '../config.js';
+import AIProfile from '../profile.js';
+import ProfileSync from '../profile-sync.js';
 import Facts from '../memory/facts.js';
 import DB from '../memory/store.js';
 import MemoryBridge from '../memory/memory-bridge.js';
@@ -22,19 +24,21 @@ const SettingsPanel = {
    */
   render() {
     const container = Render.$('#settings-content');
+    // 安全转义辅助
+    const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     container.innerHTML = `
       <!-- API 设置 -->
       <div class="setting-group">
         <h3>🔑 API 配置</h3>
         <div class="setting-item full-width">
           <label>API Key</label>
-          <input type="password" id="cfg-api-key" value="${Config.apiKey || ''}"
+          <input type="password" id="cfg-api-key" value="${esc(Config.apiKey)}"
                  placeholder="输入 DeepSeek API Key">
           <span class="setting-hint">密钥仅存储在本地浏览器中</span>
         </div>
         <div class="setting-item full-width">
           <label>API Base URL</label>
-          <input type="url" id="cfg-api-base" value="${Config.apiBase}"
+          <input type="url" id="cfg-api-base" value="${esc(Config.apiBase)}"
                  placeholder="https://api.deepseek.com/anthropic">
         </div>
         <div class="setting-item">
@@ -80,6 +84,62 @@ const SettingsPanel = {
             <option value="0" ${Config.memory.decayDays === 0 ? 'selected' : ''}>不衰减</option>
           </select>
         </div>
+      </div>
+
+      <!-- 人物档案 -->
+      <div class="setting-group">
+        <h3>🎭 AI 人物档案</h3>
+        <div class="setting-item full-width">
+          <label>AI 名字</label>
+          <input type="text" id="cfg-ai-name" value="${esc(AIProfile.current.aiName)}" placeholder="给你的AI起个名字">
+        </div>
+        <div class="setting-item full-width">
+          <label>身份角色</label>
+          <input type="text" id="cfg-ai-identity" value="${esc(AIProfile.current.aiIdentity)}" placeholder="如：知心朋友、专业顾问、幽默伙伴">
+        </div>
+        <div class="setting-item full-width">
+          <label>虚拟职业/背景</label>
+          <input type="text" id="cfg-ai-occupation" value="${esc(AIProfile.current.aiOccupation)}" placeholder="如：心理咨询师、作家、旅行者">
+        </div>
+        <div class="setting-item full-width">
+          <label>说话风格</label>
+          <input type="text" id="cfg-ai-style" value="${esc(AIProfile.current.aiSpeakingStyle)}" placeholder="如：温暖亲切、简洁干练、风趣幽默">
+        </div>
+        <div class="setting-item full-width">
+          <label>口头禅/表达习惯</label>
+          <input type="text" id="cfg-ai-phrases" value="${esc(AIProfile.current.aiCatchphrases)}" placeholder="如：哈哈、嗯哼、有道理、让我想想">
+        </div>
+        <div class="setting-item full-width">
+          <label>性格特点</label>
+          <input type="text" id="cfg-ai-traits" value="${esc(AIProfile.current.aiTraits)}" placeholder="如：善解人意、细心、幽默、理性">
+        </div>
+        <div class="setting-item full-width">
+          <label>背景故事</label>
+          <textarea id="cfg-ai-bg" rows="2" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text-primary);resize:vertical;" placeholder="如：一个喜欢读书和旅行的AI伙伴...">${esc(AIProfile.current.aiBackground)}</textarea>
+        </div>
+        <div class="setting-item full-width">
+          <label>你的昵称（AI如何称呼你）</label>
+          <input type="text" id="cfg-user-nickname" value="${esc(AIProfile.current.userNickname)}" placeholder="如：小明、老板、亲爱的">
+        </div>
+        <div class="setting-item">
+          <button class="btn-primary" id="btn-save-profile">💾 保存档案</button>
+          <button class="btn-primary" id="btn-reset-profile" style="background:var(--bg-hover);">🔄 恢复默认</button>
+        </div>
+      </div>
+
+      <!-- 档案同步 -->
+      <div class="setting-group">
+        <h3>☁️ 档案同步</h3>
+        <div class="setting-item full-width">
+          <label>远程档案 URL</label>
+          <input type="url" id="cfg-profile-url" value="${esc(ProfileSync.remoteURL)}" placeholder="https://your-server.com/my-ai-profile.json">
+          <span class="setting-hint">将人物档案托管在服务器上，启动时自动拉取。支持 GitHub Raw / Gist / 任意 JSON API</span>
+        </div>
+        <div class="setting-item">
+          <button class="btn-primary" id="btn-sync-pull">📥 从服务器拉取</button>
+          <button class="btn-primary" id="btn-sync-export" style="background:var(--bg-hover);">📤 导出档案上传</button>
+        </div>
+        <span class="setting-hint" id="sync-status"></span>
       </div>
 
       <!-- 主题设置 -->
@@ -217,8 +277,27 @@ const SettingsPanel = {
       if (!file) return;
       try {
         const text = await file.text();
+        // 文件大小限制 50MB
+        if (text.length > 50 * 1024 * 1024) throw new Error('文件过大（最大50MB）');
         const data = JSON.parse(text);
-        if (!data.version) throw new Error('无效的数据格式');
+
+        // 结构化验证
+        if (!data.version) throw new Error('无效的数据格式：缺少版本号');
+        if (data.conversations && (!Array.isArray(data.conversations) || data.conversations.length > 10000))
+          throw new Error('对话数据异常');
+        if (data.messages && (!Array.isArray(data.messages) || data.messages.length > 100000))
+          throw new Error('消息数据异常');
+        if (data.facts && (!Array.isArray(data.facts) || data.facts.length > 50000))
+          throw new Error('记忆数据异常');
+
+        // 验证关键字段
+        const validateMsgs = data.messages?.every(m => m.id && m.role && typeof m.content === 'string' && m.conversationId);
+        if (data.messages && !validateMsgs) throw new Error('消息数据格式异常');
+        const validateFacts = data.facts?.every(f => f.id && f.fact && f.category);
+        if (data.facts && !validateFacts) throw new Error('记忆数据格式异常');
+        // 长度限制
+        const longMsgs = data.messages?.filter(m => m.content.length > 100000);
+        if (longMsgs?.length > 0) throw new Error('存在超长消息内容');
 
         if (!confirm(`即将导入 ${data.conversations?.length || 0} 个对话、${data.messages?.length || 0} 条消息、${data.facts?.length || 0} 条记忆。\n\n当前数据将被覆盖，确定继续？`)) return;
 
@@ -250,6 +329,86 @@ const SettingsPanel = {
       localStorage.removeItem('chat-ai-config');
       Toast.success('所有数据已清除。请刷新页面。');
     });
+
+    // 保存人物档案
+    Render.$('#btn-save-profile').addEventListener('click', () => {
+      AIProfile.save({
+        aiName: Render.$('#cfg-ai-name').value.trim(),
+        aiIdentity: Render.$('#cfg-ai-identity').value.trim(),
+        aiOccupation: Render.$('#cfg-ai-occupation').value.trim(),
+        aiSpeakingStyle: Render.$('#cfg-ai-style').value.trim(),
+        aiCatchphrases: Render.$('#cfg-ai-phrases').value.trim(),
+        aiTraits: Render.$('#cfg-ai-traits').value.trim(),
+        aiBackground: Render.$('#cfg-ai-bg').value.trim(),
+        userNickname: Render.$('#cfg-user-nickname').value.trim(),
+      });
+      Toast.success('人物档案已保存！新对话生效');
+    });
+
+    // 重置人物档案
+    Render.$('#btn-reset-profile').addEventListener('click', () => {
+      if (!confirm('确定恢复为默认人物档案吗？')) return;
+      AIProfile.reset();
+      // 更新表单
+      Render.$('#cfg-ai-name').value = AIProfile.current.aiName;
+      Render.$('#cfg-ai-identity').value = AIProfile.current.aiIdentity;
+      Render.$('#cfg-ai-occupation').value = AIProfile.current.aiOccupation;
+      Render.$('#cfg-ai-style').value = AIProfile.current.aiSpeakingStyle;
+      Render.$('#cfg-ai-phrases').value = AIProfile.current.aiCatchphrases;
+      Render.$('#cfg-ai-traits').value = AIProfile.current.aiTraits;
+      Render.$('#cfg-ai-bg').value = AIProfile.current.aiBackground;
+      Render.$('#cfg-user-nickname').value = AIProfile.current.userNickname;
+      Toast.success('已恢复默认档案');
+    });
+
+    // 档案同步：保存URL
+    Render.$('#cfg-profile-url').addEventListener('change', () => {
+      ProfileSync.setRemoteURL(Render.$('#cfg-profile-url').value.trim());
+      Toast.success('同步 URL 已保存');
+    });
+
+    // 档案同步：从服务器拉取
+    Render.$('#btn-sync-pull').addEventListener('click', async () => {
+      const url = Render.$('#cfg-profile-url').value.trim();
+      if (url) ProfileSync.setRemoteURL(url);
+
+      const statusEl = Render.$('#sync-status');
+      statusEl.textContent = '⏳ 拉取中...';
+      try {
+        const result = await ProfileSync.pullFromServer(url || undefined);
+        statusEl.textContent = `✅ 同步成功！（导出时间：${result.exportedAt || '未知'}）`;
+        // 更新档案表单
+        Render.$('#cfg-ai-name').value = AIProfile.current.aiName;
+        Render.$('#cfg-ai-identity').value = AIProfile.current.aiIdentity;
+        Render.$('#cfg-ai-occupation').value = AIProfile.current.aiOccupation;
+        Render.$('#cfg-ai-style').value = AIProfile.current.aiSpeakingStyle;
+        Render.$('#cfg-ai-phrases').value = AIProfile.current.aiCatchphrases;
+        Render.$('#cfg-ai-traits').value = AIProfile.current.aiTraits;
+        Render.$('#cfg-ai-bg').value = AIProfile.current.aiBackground;
+        Render.$('#cfg-user-nickname').value = AIProfile.current.userNickname;
+        Toast.success('人物档案已同步！');
+      } catch (e) {
+        statusEl.textContent = `❌ ${e.message}`;
+        Toast.error(e.message);
+      }
+    });
+
+    // 档案同步：导出上传
+    Render.$('#btn-sync-export').addEventListener('click', () => {
+      ProfileSync.exportForServer();
+      const statusEl = Render.$('#sync-status');
+      statusEl.textContent = '📤 档案已导出！将文件上传到服务器后，在此处配置 URL 即可自动同步';
+      Toast.success('档案文件已下载');
+    });
+
+    // 显示最近同步时间
+    const lastSync = ProfileSync.getLastSyncTime();
+    if (lastSync) {
+      const statusEl = Render.$('#sync-status');
+      if (statusEl) {
+        statusEl.textContent = `最近同步：${new Date(lastSync).toLocaleString('zh-CN')}`;
+      }
+    }
 
     // ChromaDB 桥接
     Render.$('#btn-check-chroma').addEventListener('click', async () => {

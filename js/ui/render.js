@@ -65,6 +65,8 @@ const Render = {
    */
   simpleMarkdown(text) {
     if (!text) return '';
+    // 输入长度限制（防 ReDoS）
+    if (text.length > 50000) text = text.slice(0, 50000) + '...';
     let html = text
       // 转义 HTML
       .replace(/&/g, '&amp;')
@@ -78,8 +80,13 @@ const Render = {
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       // 斜体
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // 链接
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // 链接（阻止 javascript: data: vbscript: 等危险协议）
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
+        const safe = /^(https?:|mailto:|ftp:|\/|\.\/|#)/i.test(url.trim());
+        return safe
+          ? `<a href="${url.trim()}" target="_blank" rel="noopener noreferrer">${text}</a>`
+          : text;
+      })
       // 无序列表
       .replace(/^- (.+)$/gm, '<li>$1</li>')
       // 换行
