@@ -2,11 +2,13 @@
 // sw.js — Service Worker（PWA 离线支持）
 // ============================================
 
-const CACHE_NAME = 'chat-ai-v2';
+const CACHE_NAME = 'chat-ai-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
+  './assets/icon-192x192.png',
+  './assets/icon-512x512.png',
   './css/base.css',
   './css/layout.css',
   './css/chat.css',
