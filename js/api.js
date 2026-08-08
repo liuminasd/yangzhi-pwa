@@ -30,13 +30,22 @@ class ApiClient {
 
     this.abortController = new AbortController();
 
+    // 分离系统消息和对话消息（Anthropic 格式）
+    const systemMessages = messages.filter(m => m.role === 'system');
+    const chatMessages = messages.filter(m => m.role !== 'system');
+
     const body = {
       model,
       max_tokens: maxTokens,
       temperature,
       stream,
-      messages: this._formatMessages(messages),
+      messages: this._formatMessages(chatMessages),
     };
+
+    // 如果有系统消息，放到顶层 system 参数
+    if (systemMessages.length > 0) {
+      body.system = systemMessages.map(m => m.content).join('\n\n');
+    }
 
     const response = await this._fetch('/v1/messages', {
       method: 'POST',

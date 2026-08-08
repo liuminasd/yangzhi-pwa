@@ -2,6 +2,16 @@
 // app.js — 应用入口，初始化所有模块
 // ============================================
 
+// Polyfill: Array.prototype.findLastIndex
+if (!Array.prototype.findLastIndex) {
+  Array.prototype.findLastIndex = function(predicate) {
+    for (let i = this.length - 1; i >= 0; i--) {
+      if (predicate(this[i], i, this)) return i;
+    }
+    return -1;
+  };
+}
+
 import Config from './config.js';
 import DB from './memory/store.js';
 import Facts from './memory/facts.js';
@@ -108,9 +118,13 @@ const App = {
         };
         document.getElementById('top-title').textContent = titles[tabName] || 'AI 聊天伴侣';
 
-        // 切换到记忆Tab时刷新
+        // 切换到对应Tab时自动刷新
         if (tabName === 'memory') {
           MemoryView.load();
+        } else if (tabName === 'skills') {
+          SkillPanel.render();
+        } else if (tabName === 'settings') {
+          SettingsPanel.updateStorageInfo();
         }
       });
     });

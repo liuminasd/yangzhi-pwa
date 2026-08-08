@@ -75,9 +75,23 @@ const ChatView = {
     if (convs.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-icon">💬</div>
-          <p>还没有对话<br>点击 ＋ 开始新的聊天</p>
+          <div class="empty-icon">👋</div>
+          <p><strong>欢迎使用 AI 聊天伴侣</strong></p>
+          <p style="margin-top:8px;">
+            我是你的 AI 伙伴，我会：<br>
+            🧠 记住你告诉我的事<br>
+            💬 陪你聊天解闷<br>
+            ✨ 帮你优化表达
+          </p>
+          <button class="btn-primary" style="margin-top:16px;" id="btn-welcome-start">
+            开始聊天 →
+          </button>
         </div>`;
+      // 绑定欢迎按钮
+      setTimeout(() => {
+        const btn = document.getElementById('btn-welcome-start');
+        if (btn) btn.addEventListener('click', () => this.newChat());
+      }, 100);
       return;
     }
 
@@ -318,12 +332,12 @@ const ChatView = {
       systemPrompt += '\n\n' + skillPrompt;
     }
 
-    messages.push({ role: 'user', content: systemPrompt });
+    messages.push({ role: 'system', content: systemPrompt });
 
     // 3. 记忆注入
     const memoryContext = await Facts.buildMemoryContext(Config.memory.maxInjectFacts);
     if (memoryContext) {
-      messages.push({ role: 'user', content: memoryContext });
+      messages.push({ role: 'system', content: memoryContext });
     }
 
     // 4. 对话历史
@@ -335,7 +349,7 @@ const ChatView = {
         history, Config.chat.maxHistoryRounds
       );
       if (summary) {
-        messages.push({ role: 'user', content: `[历史对话摘要] ${summary}` });
+        messages.push({ role: 'system', content: `[历史对话摘要] ${summary}` });
       }
       for (const msg of trimmed) {
         messages.push({ role: msg.role, content: msg.content });
@@ -408,11 +422,30 @@ const ChatView = {
     });
     bubble.appendChild(contentDiv);
 
-    // 时间
-    const time = Render.el('div', 'msg-time', {
+    // 底部操作栏
+    const footer = Render.el('div', 'msg-footer');
+    footer.appendChild(Render.el('span', 'msg-time', {
       text: Security.formatTime(msg.timestamp),
-    });
-    bubble.appendChild(time);
+    }));
+    footer.appendChild(Render.el('button', 'msg-copy-btn', {
+      text: '📋',
+      title: '复制',
+      onclick: () => {
+        navigator.clipboard.writeText(msg.content).then(() => {
+          Toast.success('已复制');
+        }).catch(() => {
+          // 降级方案
+          const ta = document.createElement('textarea');
+          ta.value = msg.content;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          Toast.success('已复制');
+        });
+      },
+    }));
+    bubble.appendChild(footer);
 
     row.appendChild(bubble);
     list.appendChild(row);

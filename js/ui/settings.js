@@ -143,6 +143,10 @@ const SettingsPanel = {
       Config.save();
       this.applyTheme();
       Toast.success('设置已保存');
+      // 如果之前没有配置 API Key，引导回聊天页
+      setTimeout(() => {
+        document.querySelector('[data-tab="chat"]')?.click();
+      }, 800);
     });
 
     // 测试连接
