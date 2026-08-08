@@ -36,7 +36,7 @@ const MemoryBridge = {
       await this._ensureCollection();
 
       // 存储到 ChromaDB
-      await fetch(`${this.chromaURL}/api/v1/collections/${this.collectionName}/add`, {
+      const resp = await fetch(`${this.chromaURL}/api/v1/collections/${this.collectionName}/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -49,6 +49,10 @@ const MemoryBridge = {
           }],
         }),
       });
+      if (!resp.ok) {
+        console.warn('ChromaDB 同步失败', resp.status);
+        return false;
+      }
       return true;
     } catch (e) {
       console.warn('ChromaDB 同步失败', e);
@@ -74,7 +78,7 @@ const MemoryBridge = {
       let synced = 0;
       for (let i = 0; i < facts.length; i += batchSize) {
         const batch = facts.slice(i, i + batchSize);
-        await fetch(`${this.chromaURL}/api/v1/collections/${this.collectionName}/add`, {
+        const resp = await fetch(`${this.chromaURL}/api/v1/collections/${this.collectionName}/add`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,6 +91,10 @@ const MemoryBridge = {
             })),
           }),
         });
+        if (!resp.ok) {
+          console.warn('ChromaDB 批量同步失败', resp.status);
+          return { synced, error: `HTTP ${resp.status}` };
+        }
         synced += batch.length;
       }
       return { synced };
@@ -145,7 +153,7 @@ const MemoryBridge = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: this.collectionName,
-            metadata: { description: 'AI 聊天伴侣记忆库' },
+            metadata: { description: '仰止记忆库' },
           }),
         });
       }

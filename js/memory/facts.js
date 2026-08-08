@@ -242,9 +242,24 @@ ${messages.slice(-20).map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.con
 
     if (topFacts.length === 0) return '';
 
-    // 更新访问时间
-    for (const { fact } of topFacts) {
-      await this.touch(fact.id);
+    // 更新访问时间（副作用：此函数虽为"构建"上下文，但会写入访问记录）
+    // 批量更新在一个事务中完成，避免 N 次独立写入
+    try {
+      await DB.execInTransaction(['facts'], (stores) => {
+        for (const { fact } of topFacts) {
+          const getReq = stores.facts.get(fact.id);
+          getReq.onsuccess = () => {
+            const record = getReq.result;
+            if (record) {
+              record.lastAccessedAt = Date.now();
+              record.accessCount = (record.accessCount || 0) + 1;
+              stores.facts.put(record);
+            }
+          };
+        }
+      });
+    } catch {
+      // 批量更新失败不阻塞上下文构建（非关键操作）
     }
 
     // 组装文本
@@ -306,8 +321,8 @@ ${messages.slice(-20).map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.con
   async getSourceConversation(factId) {
     const fact = await DB.get('facts', factId);
     if (!fact || !fact.sourceConvId) return null;
-    const { default: Conversations } = await import('./conversations.js');
-    return await Conversations.get(fact.sourceConvId);
+    // 静态导入在顶层，这里直接使用即可
+    return await (await import('./conversations.js')).default.get(fact.sourceConvId);
   },
 
   /**
@@ -317,18 +332,30 @@ ${messages.slice(-20).map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.con
     const facts = await DB.getAll('facts');
     const now = Date.now();
     let removed = 0;
+    const toDelete = [];
+    const toUpdate = [];
 
     for (const fact of facts) {
-      const daysSinceAccess = (now - fact.lastAccessedAt) / 86400000;
-      // 低重要性 + 长期未访问 → 删除
+      const daysSinceAccess = (now - (fact.lastAccessedAt || fact.createdAt)) / 86400000;
       if (fact.importance < 0.3 && daysSinceAccess > decayDays) {
-        await DB.delete('facts', fact.id);
+        toDelete.push(fact.id);
         removed++;
-      }
-      // 中等重要性 + 极长期未访问 → 降权
-      else if (fact.importance < 0.5 && daysSinceAccess > decayDays * 2) {
+      } else if (fact.importance < 0.5 && daysSinceAccess > decayDays * 2) {
         fact.importance = Math.max(0.1, fact.importance - 0.1);
-        await DB.put('facts', fact);
+        toUpdate.push(fact);
+      }
+    }
+
+    // 批量操作在一个事务中完成
+    if (toDelete.length > 0 || toUpdate.length > 0) {
+      try {
+        await DB.execInTransaction(['facts'], (stores) => {
+          for (const id of toDelete) stores.facts.delete(id);
+          for (const fact of toUpdate) stores.facts.put(fact);
+        });
+      } catch (e) {
+        console.warn('批量衰减操作失败', e);
+        return 0;
       }
     }
 

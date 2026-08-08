@@ -12,6 +12,9 @@ const MemoryView = {
    * 初始化记忆界面
    */
   async init() {
+    if (this._initialized) return;
+    this._initialized = true;
+
     Render.$('#memory-search-input').addEventListener('input',
       Render.debounce(() => this.search(), 300)
     );

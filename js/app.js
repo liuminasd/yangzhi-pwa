@@ -24,11 +24,6 @@ import MemoryView from './ui/memory-view.js';
 import SettingsPanel from './ui/settings.js';
 import Toast from './ui/toast.js';
 
-// 全局事件总线
-window.App = {
-  events: new EventTarget(),
-};
-
 const App = {
   async init() {
     const DEBUG = false; // 生产环境关闭调试日志
@@ -58,7 +53,7 @@ const App = {
       if (Config.memory.decayDays > 0) {
         Facts.decayMaintenance(Config.memory.decayDays).then(removed => {
           if (removed > 0) log(`记忆衰减清理了 ${removed} 条旧记忆`);
-        });
+        }).catch(e => console.warn('记忆衰减维护失败', e));
       }
 
       // 6. 检查 API Key — 无 Key 则显示强制配置页面
@@ -76,7 +71,7 @@ const App = {
       // 9. 更新连接状态
       this.updateConnectionStatus();
 
-      log('AI 聊天伴侣 初始化完成');
+      log('仰止 初始化完成');
     } catch (error) {
       console.error('初始化失败', error && error.message || error);
       Toast.error('应用初始化失败，请刷新页面');
@@ -122,12 +117,13 @@ const App = {
 
         // 更新顶部标题
         const titles = {
-          chat: 'AI 聊天伴侣',
+          chat: '仰止',
           skills: '技能中心',
           memory: '我的记忆',
           settings: '设置',
         };
-        document.getElementById('top-title').textContent = titles[tabName] || 'AI 聊天伴侣';
+        const titleEl = document.getElementById('top-title');
+        if (titleEl) titleEl.textContent = titles[tabName] || '仰止';
 
         // 切换到对应Tab时自动刷新
         if (tabName === 'memory') {
@@ -148,12 +144,17 @@ const App = {
     if (Config.theme === 'auto') {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-      // 监听系统主题变化
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      // 监听系统主题变化（保存引用以便清理）
+      if (this._themeListener) {
+        this._themeListener.removeEventListener('change', this._themeHandler);
+      }
+      this._themeListener = window.matchMedia('(prefers-color-scheme: dark)');
+      this._themeHandler = (e) => {
         if (Config.theme === 'auto') {
           document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
         }
-      });
+      };
+      this._themeListener.addEventListener('change', this._themeHandler);
     } else {
       document.documentElement.setAttribute('data-theme', Config.theme);
     }
@@ -177,7 +178,7 @@ const App = {
     overlay.innerHTML = `
       <div id="setup-card">
         <div class="setup-icon">🔑</div>
-        <h1>欢迎使用 AI 聊天伴侣</h1>
+        <h1>欢迎使用 仰止</h1>
         <p>在开始之前，请配置 DeepSeek API Key</p>
         <div class="setup-steps">
           📌 <strong>如何获取 API Key？</strong><br>
@@ -288,6 +289,7 @@ const App = {
 
   updateConnectionStatus() {
     const dot = document.getElementById('connection-dot');
+    if (!dot) return;
     const update = () => {
       const online = navigator.onLine;
       dot.className = online ? 'dot-online' : 'dot-offline';

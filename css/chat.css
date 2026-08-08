@@ -368,3 +368,220 @@
 .chat-menu-dropdown button.danger {
   color: var(--danger);
 }
+
+/* ============================================
+   多选工具栏
+   ============================================ */
+#select-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--accent-glow);
+  border-bottom: 1px solid var(--border);
+  animation: fadeIn 0.2s ease;
+}
+#select-toolbar.hidden { display: none; }
+#select-toolbar #select-count {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent);
+}
+#btn-select-cancel,
+#btn-select-all {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+#btn-select-cancel:active,
+#btn-select-all:active {
+  background: var(--bg-hover);
+}
+
+/* 多选复选框 */
+.select-checkbox {
+  display: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 8px;
+  position: relative;
+  transition: all var(--transition);
+}
+.msg-row.select-mode .select-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.msg-row.selected .select-checkbox {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.msg-row.selected .select-checkbox::after {
+  content: '✓';
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+}
+.msg-row.selected .msg-bubble {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ============================================
+   浮动上下文菜单
+   ============================================ */
+.context-menu {
+  position: fixed;
+  z-index: 400;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  min-width: 140px;
+  animation: fadeIn 0.12s ease;
+  overflow: hidden;
+}
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background var(--transition);
+}
+.context-menu button:active {
+  background: var(--bg-hover);
+}
+.context-menu button + button {
+  border-top: 1px solid var(--border);
+}
+
+/* ============================================
+   发言人提示条
+   ============================================ */
+#speaker-hint-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  background: var(--accent-glow);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--accent);
+  animation: fadeIn 0.25s ease;
+}
+#speaker-hint-chip.hidden { display: none; }
+#speaker-hint-chip span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#speaker-hint-chip .chip-close {
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+#speaker-hint-chip .chip-close:active {
+  opacity: 1;
+}
+
+/* ============================================
+   发言人标签（气泡内）
+   ============================================ */
+.msg-speaker-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ============================================
+   消息附件图片
+   ============================================ */
+.msg-attachment {
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+}
+.msg-attachment img {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition);
+}
+.msg-attachment img:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   图片预览区
+   ============================================ */
+#image-preview {
+  position: relative;
+  margin-bottom: 8px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  animation: fadeIn 0.2s ease;
+}
+#image-preview.hidden { display: none; }
+#preview-img {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  background: #000;
+}
+#ocr-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+#ocr-progress.hidden { display: none; }
+#ocr-progress .loading-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* ============================================
+   附件/识别按钮
+   ============================================ */
+#btn-attach-image,
+#btn-detect-speaker {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+#btn-attach-image:active,
+#btn-detect-speaker:active {
+  background: var(--bg-hover);
+}

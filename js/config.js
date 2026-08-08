@@ -35,9 +35,25 @@ const Config = {
       const saved = localStorage.getItem('chat-ai-config');
       if (saved) {
         const data = JSON.parse(saved);
-        Object.assign(this, data);
-        if (data.memory) Object.assign(this.memory, data.memory);
-        if (data.chat) Object.assign(this.chat, data.chat);
+        // 白名单方式恢复字段，防止恶意 JSON 覆写方法
+        if (typeof data.apiKey === 'string') this.apiKey = data.apiKey;
+        if (typeof data.apiBase === 'string') this.apiBase = data.apiBase;
+        if (typeof data.model === 'string') this.model = data.model;
+        if (typeof data.fastModel === 'string') this.fastModel = data.fastModel;
+        if (typeof data.maxTokens === 'number') this.maxTokens = data.maxTokens;
+        if (typeof data.temperature === 'number') this.temperature = data.temperature;
+        if (typeof data.theme === 'string') this.theme = data.theme;
+        if (data.memory && typeof data.memory === 'object') {
+          if (typeof data.memory.autoExtract === 'boolean') this.memory.autoExtract = data.memory.autoExtract;
+          if (typeof data.memory.extractThreshold === 'number') this.memory.extractThreshold = data.memory.extractThreshold;
+          if (typeof data.memory.maxInjectFacts === 'number') this.memory.maxInjectFacts = data.memory.maxInjectFacts;
+          if (typeof data.memory.decayDays === 'number') this.memory.decayDays = data.memory.decayDays;
+        }
+        if (data.chat && typeof data.chat === 'object') {
+          if (typeof data.chat.maxHistoryRounds === 'number') this.chat.maxHistoryRounds = data.chat.maxHistoryRounds;
+          if (typeof data.chat.compressThreshold === 'number') this.chat.compressThreshold = data.chat.compressThreshold;
+          if (typeof data.chat.streamResponse === 'boolean') this.chat.streamResponse = data.chat.streamResponse;
+        }
       }
     } catch (e) {
       console.warn('加载配置失败，使用默认值', e);

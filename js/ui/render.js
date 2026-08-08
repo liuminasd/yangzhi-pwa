@@ -67,31 +67,49 @@ const Render = {
     if (!text) return '';
     // 输入长度限制（防 ReDoS）
     if (text.length > 50000) text = text.slice(0, 50000) + '...';
+
+    // ★ 先提取代码块和行内代码到占位数组，防止后续正则破坏代码内容
+    const codeBlocks = [];
     let html = text
-      // 转义 HTML
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      // 代码块
-      .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      // 行内代码
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      // 粗体
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      // 斜体
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // 链接（阻止 javascript: data: vbscript: 等危险协议）
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
-        const safe = /^(https?:|mailto:|ftp:|\/|\.\/|#)/i.test(url.trim());
-        return safe
-          ? `<a href="${url.trim()}" target="_blank" rel="noopener noreferrer">${text}</a>`
-          : text;
-      })
-      // 无序列表
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      // 换行
-      .replace(/\n\n/g, '</p><p>')
+      .replace(/>/g, '&gt;');
+
+    // 提取围栏代码块 ```...```
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push(`<pre><code>${code}</code></pre>`);
+      return `\x00CODEBLOCK${idx}\x00`;
+    });
+
+    // 提取行内代码 `...`
+    html = html.replace(/`([^`]+)`/g, (_, code) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push(`<code>${code}</code>`);
+      return `\x00CODEBLOCK${idx}\x00`;
+    });
+
+    // 粗体
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // 斜体
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // 链接（阻止 javascript: data: vbscript: 等危险协议）
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, url) => {
+      const safe = /^(https?:|mailto:|ftp:|\/|\.\/|#)/i.test(url.trim());
+      return safe
+        ? `<a href="${url.trim()}" target="_blank" rel="noopener noreferrer">${linkText}</a>`
+        : linkText;
+    });
+    // 无序列表（占位符 \x00CODEBLOCK 不包含 - 字符，安全）
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    // 换行
+    html = html.replace(/\n\n/g, '</p><p>')
       .replace(/\n/g, '<br>');
+
+    // ★ 还原代码占位符
+    html = html.replace(/\x00CODEBLOCK(\d+)\x00/g, (_, idx) => {
+      return codeBlocks[parseInt(idx)] || '';
+    });
 
     // 包裹段落
     html = '<p>' + html + '</p>';

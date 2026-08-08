@@ -11,6 +11,8 @@ const SkillPanel = {
    * 初始化技能面板
    */
   init() {
+    if (this._initialized) return;
+    this._initialized = true;
     this.render();
   },
 

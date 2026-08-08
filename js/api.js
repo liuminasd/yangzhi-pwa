@@ -71,36 +71,38 @@ class ApiClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let contentBlocks = [];
-    let currentBlock = null;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
-        try {
-          const data = JSON.parse(trimmed.slice(6));
-          const event = this._parseStreamEvent(data);
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            const event = this._parseStreamEvent(data);
 
-          if (event.type === 'delta' && event.text) {
-            yield { type: 'delta', text: event.text };
-          } else if (event.type === 'stop') {
-            yield { type: 'stop', usage: event.usage };
-          } else if (event.type === 'error') {
-            yield { type: 'error', error: event.error };
+            if (event.type === 'delta' && event.text) {
+              yield { type: 'delta', text: event.text };
+            } else if (event.type === 'stop') {
+              yield { type: 'stop', usage: event.usage };
+            } else if (event.type === 'error') {
+              yield { type: 'error', error: event.error };
+            }
+          } catch (e) {
+            // 跳过无法解析的行
           }
-        } catch (e) {
-          // 跳过无法解析的行
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 
@@ -160,9 +162,20 @@ class ApiClient {
           ...options.headers,
         };
 
+        // 合并超时信号（60秒超时）
+        const timeoutSignal = AbortSignal.timeout(60000);
+        let signal = timeoutSignal;
+        if (options.signal) {
+          // AbortSignal.any() 兼容性处理（Firefox 135+, Safari 17+）
+          signal = typeof AbortSignal.any === 'function'
+            ? AbortSignal.any([options.signal, timeoutSignal])
+            : options.signal; // 降级：只响应用户中断，不设超时
+        }
+
         return await fetch(`${Config.apiBase}${url}`, {
           ...options,
           headers,
+          signal,
         });
       } catch (error) {
         lastError = error;

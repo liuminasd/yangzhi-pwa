@@ -2,7 +2,7 @@
 // sw.js — Service Worker（PWA 离线支持）
 // ============================================
 
-const CACHE_NAME = 'chat-ai-v1';
+const CACHE_NAME = 'chat-ai-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -40,6 +40,10 @@ const ASSETS_TO_CACHE = [
   './js/ui/skill-panel.js',
   './js/ui/memory-view.js',
   './js/ui/settings.js',
+  './js/ui/ocr.js',
+  './js/ui/copy.js',
+  './js/ui/context-menu.js',
+  './js/ui/speaker-detect.js',
 ];
 
 // 安装：预缓存所有静态资源

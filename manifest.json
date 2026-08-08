@@ -1,8 +1,8 @@
 {
-  "name": "AI 聊天伴侣",
-  "short_name": "聊天伴侣",
-  "description": "有记忆、有温度的 AI 聊天助手",
-  "start_url": "./index.html",
+  "name": "仰止",
+  "short_name": "仰止",
+  "description": "有记忆、有温度的 AI 伙伴",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#1a1a2e",

@@ -8,15 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self';
-    connect-src 'self' https: http://127.0.0.1:*;
+    script-src 'self' https://cdn.jsdelivr.net;
+    connect-src 'self' https: http://127.0.0.1:* https://cdn.jsdelivr.net;
     style-src 'self' 'unsafe-inline';
-    img-src 'self' data: https:;
+    img-src 'self' data: blob: https:;
+    worker-src 'self' blob: https://cdn.jsdelivr.net;
   ">
-  <meta name="description" content="AI 聊天伴侣 — 有记忆、有温度的智能助手">
+  <meta name="description" content="仰止 — 有记忆、有温度的 AI 伙伴">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
-  <title>AI 聊天伴侣</title>
+  <title>仰止</title>
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/chat.css">
@@ -30,7 +31,7 @@
 
     <!-- 顶部状态栏 -->
     <header id="top-bar">
-      <span id="top-title">AI 聊天伴侣</span>
+      <span id="top-title">仰止</span>
       <span id="connection-dot" class="dot-offline" title="连接状态"></span>
     </header>
 
@@ -52,18 +53,44 @@
               <span id="chat-title">新对话</span>
               <button id="btn-chat-menu" class="btn-icon">⋯</button>
             </div>
+            <!-- 多选工具栏（默认隐藏） -->
+            <div id="select-toolbar" class="hidden">
+              <button id="btn-select-cancel" class="btn-icon">✕</button>
+              <span id="select-count">已选择 0 条</span>
+              <button id="btn-select-all" class="btn-icon">全选</button>
+              <button id="btn-select-copy" class="btn-primary" style="font-size:13px;padding:6px 14px;">📋 复制</button>
+            </div>
             <div id="message-list"></div>
             <div id="typing-indicator" class="hidden">
               <span class="dot"></span><span class="dot"></span><span class="dot"></span>
             </div>
             <div id="input-area">
               <div id="active-skills"></div>
+              <!-- 发言人识别提示条 -->
+              <div id="speaker-hint-chip" class="hidden">
+                <span>💬 检测到聊天记录格式</span>
+                <button id="btn-parse-speakers" class="btn-primary" style="font-size:11px;padding:4px 10px;">识别发言人</button>
+                <button id="btn-close-speaker-hint" class="chip-close">✕</button>
+              </div>
+              <!-- 图片预览区 -->
+              <div id="image-preview" class="hidden">
+                <img id="preview-img" src="" alt="截图预览">
+                <div id="ocr-progress" class="hidden">
+                  <span class="loading-spinner"></span>
+                  <span id="ocr-progress-text">识别中...</span>
+                </div>
+                <button id="btn-clear-preview" class="btn-icon" title="移除图片" style="position:absolute;top:2px;right:2px;width:22px;height:22px;font-size:12px;background:rgba(0,0,0,0.5);color:#fff;border-radius:50%;">✕</button>
+              </div>
               <div class="input-row">
+                <button id="btn-attach-image" class="btn-icon" title="发送截图（支持长截图）">🖼</button>
+                <button id="btn-detect-speaker" class="btn-icon" title="识别发言人">👥</button>
                 <button id="btn-skill-quick" class="btn-icon" title="技能">✨</button>
-                <textarea id="user-input" rows="1" placeholder="输入消息..." enterkeyhint="send"></textarea>
+                <textarea id="user-input" rows="1" placeholder="输入消息，支持粘贴截图..." enterkeyhint="send"></textarea>
                 <button id="btn-send" class="btn-send" title="发送">➤</button>
               </div>
             </div>
+            <!-- 隐藏的文件选择器 -->
+            <input type="file" id="image-file-input" accept="image/*" style="display:none">
           </div>
         </div>
       </section>
@@ -133,6 +160,10 @@
   <script type="module" src="js/skills/brainstorm.js"></script>
   <script type="module" src="js/ui/render.js"></script>
   <script type="module" src="js/ui/toast.js"></script>
+  <script type="module" src="js/ui/context-menu.js"></script>
+  <script type="module" src="js/ui/copy.js"></script>
+  <script type="module" src="js/ui/ocr.js"></script>
+  <script type="module" src="js/ui/speaker-detect.js"></script>
   <script type="module" src="js/ui/chat-view.js"></script>
   <script type="module" src="js/ui/skill-panel.js"></script>
   <script type="module" src="js/ui/memory-view.js"></script>

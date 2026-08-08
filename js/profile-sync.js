@@ -28,30 +28,39 @@ const ProfileSync = {
    */
   setRemoteURL(url) {
     this.remoteURL = url;
-    localStorage.setItem('chat-ai-profile-sync', JSON.stringify({
-      remoteURL: url,
-      lastSync: Date.now(),
-    }));
+    try {
+      localStorage.setItem('chat-ai-profile-sync', JSON.stringify({
+        remoteURL: url,
+        lastSync: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('保存同步URL失败（存储可能已满）', e);
+    }
   },
 
   /**
    * 导出档案为 JSON 文件（供手动上传到服务器）
    */
   exportForServer() {
-    const data = {
-      type: 'ai-profile',
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      profile: AIProfile.current,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ai-profile-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    return data;
+    try {
+      const data = {
+        type: 'ai-profile',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        profile: AIProfile.current,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ai-profile-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return data;
+    } catch (e) {
+      console.error('导出档案失败', e);
+      throw e;
+    }
   },
 
   /**
@@ -89,10 +98,14 @@ const ProfileSync = {
       AIProfile.save(merged);
 
       // 记录同步时间
-      localStorage.setItem('chat-ai-profile-sync', JSON.stringify({
-        remoteURL: this.remoteURL,
-        lastSync: Date.now(),
-      }));
+      try {
+        localStorage.setItem('chat-ai-profile-sync', JSON.stringify({
+          remoteURL: this.remoteURL,
+          lastSync: Date.now(),
+        }));
+      } catch (e) {
+        console.warn('保存同步时间失败（存储可能已满）', e);
+      }
 
       return {
         success: true,

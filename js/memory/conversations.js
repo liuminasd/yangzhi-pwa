@@ -45,9 +45,29 @@ const Conversations = {
    * 获取对话的消息列表
    */
   async getMessages(convId, limit = 100) {
-    const messages = await DB.getByIndex('messages', 'conversationId', convId);
-    messages.sort((a, b) => a.timestamp - b.timestamp);
-    return limit ? messages.slice(-limit) : messages;
+    // 使用 cursor 方向读取最近 N 条消息（避免全量加载后切片）
+    if (!DB.db) {
+      // 降级：数据库未初始化时使用全量加载
+      const messages = await DB.getByIndex('messages', 'conversationId', convId);
+      messages.sort((a, b) => a.timestamp - b.timestamp);
+      return limit ? messages.slice(-limit) : messages;
+    }
+    return new Promise((resolve, reject) => {
+      const tx = DB.db.transaction('messages', 'readonly');
+      const idx = tx.objectStore('messages').index('conversationId');
+      const results = [];
+      const request = idx.openCursor(IDBKeyRange.only(convId), 'prev');
+      request.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor && results.length < limit) {
+          results.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(results.reverse());
+        }
+      };
+      request.onerror = () => reject(request.error);
+    });
   },
 
   /**
@@ -62,19 +82,41 @@ const Conversations = {
       timestamp: Date.now(),
       skillOrigin: metadata.skillId || null,
       tokens: metadata.tokens || 0,
+      // v2: 扩展字段
+      attachments: metadata.attachments || null,
+      senderName: metadata.senderName || null,
     };
-    await DB.add('messages', msg);
 
-    // 更新对话元数据
-    const conv = await DB.get('conversations', convId);
-    if (conv) {
-      conv.updatedAt = Date.now();
-      conv.messageCount = (conv.messageCount || 0) + 1;
-      // 自动更新标题（取用户第一条消息的前30字）
-      if (conv.title === '新对话' && role === 'user') {
-        conv.title = content.replace(/\n/g, ' ').slice(0, 30);
+    try {
+      await DB.execInTransaction(['messages', 'conversations'], (stores) => {
+        stores.messages.add(msg);
+        const convStore = stores.conversations;
+        const getReq = convStore.get(convId);
+        getReq.onsuccess = () => {
+          const conv = getReq.result;
+          if (conv) {
+            conv.updatedAt = Date.now();
+            conv.messageCount = (conv.messageCount || 0) + 1;
+            if (conv.title === '新对话' && role === 'user') {
+              conv.title = content.replace(/\n/g, ' ').slice(0, 30);
+            }
+            convStore.put(conv);
+          }
+        };
+      });
+    } catch (e) {
+      // 事务失败，回退到单独写入消息
+      console.warn('事务写入失败，回退到单独写入', e);
+      await DB.add('messages', msg);
+      const conv = await DB.get('conversations', convId);
+      if (conv) {
+        conv.updatedAt = Date.now();
+        conv.messageCount = (conv.messageCount || 0) + 1;
+        if (conv.title === '新对话' && role === 'user') {
+          conv.title = content.replace(/\n/g, ' ').slice(0, 30);
+        }
+        await DB.put('conversations', conv);
       }
-      await DB.put('conversations', conv);
     }
 
     return msg;
@@ -97,10 +139,22 @@ const Conversations = {
    */
   async remove(id) {
     const messages = await DB.getByIndex('messages', 'conversationId', id);
-    for (const msg of messages) {
-      await DB.delete('messages', msg.id);
+
+    try {
+      await DB.execInTransaction(['messages', 'conversations'], (stores) => {
+        for (const msg of messages) {
+          stores.messages.delete(msg.id);
+        }
+        stores.conversations.delete(id);
+      });
+    } catch (e) {
+      // 事务失败，回退到逐条删除（尽力而为）
+      console.warn('事务删除失败，回退到逐条删除', e);
+      for (const msg of messages) {
+        await DB.delete('messages', msg.id);
+      }
+      await DB.delete('conversations', id);
     }
-    await DB.delete('conversations', id);
   },
 
   /**

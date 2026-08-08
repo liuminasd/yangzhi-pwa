@@ -16,6 +16,8 @@ const SettingsPanel = {
    * 初始化设置页面
    */
   init() {
+    if (this._initialized) return;
+    this._initialized = true;
     this.render();
   },
 
@@ -301,15 +303,31 @@ const SettingsPanel = {
 
         if (!confirm(`即将导入 ${data.conversations?.length || 0} 个对话、${data.messages?.length || 0} 条消息、${data.facts?.length || 0} 条记忆。\n\n当前数据将被覆盖，确定继续？`)) return;
 
-        // 清空现有数据
-        await DB.clear('conversations');
-        await DB.clear('messages');
-        await DB.clear('facts');
+        // 清空现有数据（原子性：任一步失败则中止导入，保护现有数据）
+        try {
+          await DB.clear('conversations');
+          await DB.clear('messages');
+          await DB.clear('facts');
+        } catch (clearErr) {
+          throw new Error(`清空旧数据失败，导入已中止：${clearErr.message}`);
+        }
 
-        // 批量导入
-        for (const conv of data.conversations || []) await DB.add('conversations', conv);
-        for (const msg of data.messages || []) await DB.add('messages', msg);
-        for (const fact of data.facts || []) await DB.add('facts', fact);
+        // 批量导入（任一步失败则中止并提示）
+        try {
+          for (const conv of data.conversations || []) await DB.add('conversations', conv);
+        } catch (e) {
+          throw new Error(`导入对话失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+        }
+        try {
+          for (const msg of data.messages || []) await DB.add('messages', msg);
+        } catch (e) {
+          throw new Error(`导入消息失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+        }
+        try {
+          for (const fact of data.facts || []) await DB.add('facts', fact);
+        } catch (e) {
+          throw new Error(`导入记忆失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+        }
 
         Toast.success('数据导入成功！请刷新页面');
       } catch (e) {
@@ -326,7 +344,11 @@ const SettingsPanel = {
       await DB.clear('conversations');
       await DB.clear('messages');
       await DB.clear('facts');
+      await DB.clear('profile');
+      await DB.clear('attachments');
       localStorage.removeItem('chat-ai-config');
+      localStorage.removeItem('chat-ai-profile');
+      localStorage.removeItem('chat-ai-profile-sync');
       Toast.success('所有数据已清除。请刷新页面。');
     });
 

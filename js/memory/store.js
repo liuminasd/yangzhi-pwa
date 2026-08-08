@@ -4,7 +4,7 @@
 // ============================================
 
 const DB_NAME = 'chat-ai-assistant';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 class Store {
   constructor() {
@@ -47,10 +47,23 @@ class Store {
         if (!db.objectStoreNames.contains('profile')) {
           db.createObjectStore('profile', { keyPath: 'key' });
         }
+
+        // v2: 附件表（图片/OCR）
+        if (!db.objectStoreNames.contains('attachments')) {
+          const attStore = db.createObjectStore('attachments', { keyPath: 'id' });
+          attStore.createIndex('conversationId', 'conversationId', { unique: false });
+          attStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
       };
 
       request.onsuccess = (e) => {
         this.db = e.target.result;
+        // 处理版本变更（多标签页场景）：关闭旧连接，让其他标签页完成升级
+        this.db.onversionchange = () => {
+          this.db.close();
+          this.db = null;
+          console.warn('IndexedDB 版本变更，连接已关闭，请刷新页面');
+        };
         resolve(this.db);
       };
 
@@ -175,6 +188,27 @@ class Store {
   }
 
   /**
+   * 在事务中执行多对象存储操作（保证原子性）
+   */
+  async execInTransaction(storeNames, callback) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(storeNames, 'readwrite');
+      const stores = {};
+      for (const name of storeNames) {
+        stores[name] = tx.objectStore(name);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
+      try {
+        callback(stores, tx);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /**
    * 通用：计数
    */
   async count(storeName) {
@@ -191,14 +225,18 @@ class Store {
    * 获取数据库大小估算
    */
   async getStorageEstimate() {
-    if (navigator.storage && navigator.storage.estimate) {
-      const estimate = await navigator.storage.estimate();
-      return {
-        used: estimate.usage || 0,
-        total: estimate.quota || 0,
-        usedFormatted: this._formatBytes(estimate.usage || 0),
-        totalFormatted: this._formatBytes(estimate.quota || 0),
-      };
+    try {
+      if (navigator.storage?.estimate) {
+        const estimate = await navigator.storage.estimate();
+        return {
+          used: estimate.usage || 0,
+          total: estimate.quota || 0,
+          usedFormatted: this._formatBytes(estimate.usage || 0),
+          totalFormatted: this._formatBytes(estimate.quota || 0),
+        };
+      }
+    } catch (e) {
+      console.warn('存储估算失败', e);
     }
     return null;
   }

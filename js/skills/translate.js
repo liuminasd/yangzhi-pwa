@@ -14,17 +14,19 @@ const TranslateSkill = {
   systemPrompt: null,
 
   async preprocess(input) {
+    // 每个模式分别指定 target 和 text 在捕获组中的位置
+    // Pattern 2（中译英）的 target 在 group 2，text 在 group 3，与另外两个不同
     const patterns = [
-      /翻译[成]*(中|英)文[：:]\s*(.+)/,
-      /(中|英)译(中|英)[：:]\s*(.+)/,
-      /用(中|英)文说[：:]\s*(.+)/,
+      { regex: /翻译[成]*(中|英)文[：:]\s*(.+)/,   targetGroup: 1, textGroup: 2 },
+      { regex: /(中|英)译(中|英)[：:]\s*(.+)/,       targetGroup: 2, textGroup: 3 },
+      { regex: /用(中|英)文说[：:]\s*(.+)/,           targetGroup: 1, textGroup: 2 },
     ];
 
-    for (const pattern of patterns) {
-      const match = input.match(pattern);
+    for (const { regex, targetGroup, textGroup } of patterns) {
+      const match = input.match(regex);
       if (match) {
-        const target = match[1] === '英' ? '英文' : '中文';
-        const text = match[2] || match[3];
+        const target = match[targetGroup] === '英' ? '英文' : '中文';
+        const text = match[textGroup];
         return `请将以下文本翻译成${target}，保持原意和语气：
 
 "${text}"

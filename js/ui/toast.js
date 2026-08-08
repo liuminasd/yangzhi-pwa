@@ -8,6 +8,9 @@ const Toast = {
   _ensureContainer() {
     if (!this.container) {
       this.container = document.getElementById('toast-container');
+      if (!this.container) {
+        console.error('Toast 容器未找到');
+      }
     }
   },
 
@@ -16,6 +19,7 @@ const Toast = {
    */
   show(message, type = 'info', duration = 2500) {
     this._ensureContainer();
+    if (!this.container) return; // 容器缺失时静默失败
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;

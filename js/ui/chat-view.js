@@ -13,10 +13,15 @@ import Registry from '../skills/registry.js';
 import API from '../api.js';
 import Config from '../config.js';
 import AIProfile from '../profile.js';
+import ContextMenu from './context-menu.js';
+import CopyManager from './copy.js';
+import OCR from './ocr.js';
+import SpeakerDetect from './speaker-detect.js';
 
 const ChatView = {
   currentConvId: null,
   isStreaming: false,
+  _savingInProgress: false,  // 流完成后保存期间的独立守卫，防止 stopGeneration 重复保存和 sendMessage 重入
   streamBuffer: '',
   streamBubble: null,
 
@@ -24,8 +29,31 @@ const ChatView = {
    * 初始化聊天界面
    */
   async init() {
+    if (this._initialized) return;
+    this._initialized = true;
+
     this.bindEvents();
     await this.loadConversations();
+
+    // 初始化 OCR（传递回调）
+    OCR.init({
+      onProgress: (msg) => {
+        const el = document.getElementById('ocr-progress-text');
+        if (el) el.textContent = msg;
+      },
+      onComplete: (text, file, isLongScreenshot) => {
+        const input = Render.$('#user-input');
+        if (text) {
+          input.value = (input.value ? input.value + '\n' : '') + text;
+          // 长截图：自动触发发言方识别
+          if (isLongScreenshot && SpeakerDetect.looksLikeChat(text)) {
+            setTimeout(() => this._detectSpeakers(), 500);
+          }
+        }
+        input.focus();
+      },
+      onError: (msg) => Toast.error(msg),
+    });
   },
 
   /**
@@ -61,7 +89,7 @@ const ChatView = {
     Render.$('#btn-chat-menu').addEventListener('click', (e) => this.toggleChatMenu(e));
     // 技能快捷入口
     Render.$('#btn-skill-quick').addEventListener('click', () => {
-      document.querySelector('[data-tab="skills"]').click();
+      document.querySelector('[data-tab="skills"]')?.click();
     });
     // 点击其他地方关闭菜单
     document.addEventListener('click', (e) => {
@@ -73,51 +101,119 @@ const ChatView = {
 
     // 移动端滑动手势
     this._bindSwipeGestures();
+
+    // 长按/右键上下文菜单
+    ContextMenu.init(Render.$('#message-list'), (msgEl) => {
+      const msgId = msgEl.dataset.msgId;
+      if (!msgId || msgId === 'streaming') return [];
+      return [
+        { label: '复制', icon: '📋', action: () => {
+          const msg = this._findMsgById(msgId);
+          if (msg) CopyManager.copyMessage(msg.content);
+        }},
+        { label: '多选', icon: '✅', action: () => CopyManager.enterSelectMode() },
+      ];
+    });
+
+    // 多选工具栏
+    CopyManager.init((mode, count) => {
+      if (mode === 'select') {
+        document.getElementById('select-toolbar')?.classList.remove('hidden');
+        document.getElementById('chat-header')?.classList.add('hidden');
+        const countEl = document.getElementById('select-count');
+        if (countEl) countEl.textContent = `已选择 ${count} 条`;
+        document.querySelectorAll('.msg-row').forEach(row => {
+          row.classList.add('select-mode');
+          const cb = row.querySelector('.select-checkbox input');
+          if (cb) cb.checked = CopyManager.selectedIds.has(row.dataset.msgId);
+        });
+      } else {
+        document.getElementById('select-toolbar')?.classList.add('hidden');
+        document.getElementById('chat-header')?.classList.remove('hidden');
+        document.querySelectorAll('.msg-row').forEach(row => {
+          row.classList.remove('select-mode', 'selected');
+        });
+      }
+    });
+
+    Render.$('#btn-select-cancel').addEventListener('click', () => CopyManager.exitSelectMode());
+    Render.$('#btn-select-all').addEventListener('click', () => {
+      const ids = [...document.querySelectorAll('.msg-row')]
+        .map(r => r.dataset.msgId)
+        .filter(id => id && id !== 'streaming');
+      CopyManager.selectAll(ids);
+    });
+    Render.$('#btn-select-copy').addEventListener('click', async () => {
+      const allMsgs = await Conversations.getMessages(this.currentConvId, 500);
+      await CopyManager.copySelected(allMsgs);
+    });
+
+    // 发言人识别按钮
+    Render.$('#btn-detect-speaker').addEventListener('click', () => {
+      this._detectSpeakers();
+    });
+
+    // 关闭发言人提示
+    Render.$('#btn-close-speaker-hint').addEventListener('click', () => {
+      document.getElementById('speaker-hint-chip')?.classList.add('hidden');
+    });
+
+    // 发言人提示条中的"识别发言人"按钮
+    Render.$('#btn-parse-speakers').addEventListener('click', () => {
+      this._detectSpeakers();
+    });
+
+    // 粘贴文本时检测聊天记录格式
+    input.addEventListener('paste', (e) => {
+      // 延迟检测（等待粘贴内容填入）
+      setTimeout(() => {
+        const text = input.value;
+        if (text && SpeakerDetect.looksLikeChat(text)) {
+          document.getElementById('speaker-hint-chip')?.classList.remove('hidden');
+        }
+      }, 100);
+    });
   },
 
   /**
    * 绑定移动端滑动手势
    */
   _bindSwipeGestures() {
-    let touchStartX = 0;
-    let touchStartY = 0;
-
-    // 对话列表左滑删除
+    // 对话列表左滑删除（独立坐标）
+    let listStartX = 0, listStartY = 0;
     Render.$('#conversations').addEventListener('touchstart', (e) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
+      listStartX = e.touches[0].clientX;
+      listStartY = e.touches[0].clientY;
     }, { passive: true });
 
     Render.$('#conversations').addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dx = e.changedTouches[0].clientX - listStartX;
+      const dy = e.changedTouches[0].clientY - listStartY;
 
-      // 水平滑动超过 60px 且大于垂直滑动
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         const target = e.target.closest('.conv-item');
         if (target && target.dataset.id) {
           if (dx < 0) {
-            // 左滑删除
             this.deleteConversation(target.dataset.id);
           }
         }
       }
     });
 
-    // 聊天窗口右滑返回（仅移动端）
+    // 聊天窗口右滑返回（独立坐标，仅移动端）
+    let chatStartX = 0, chatStartY = 0;
     const chatWindow = Render.$('#chat-window');
     chatWindow.addEventListener('touchstart', (e) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
+      chatStartX = e.touches[0].clientX;
+      chatStartY = e.touches[0].clientY;
     }, { passive: true });
 
     chatWindow.addEventListener('touchend', (e) => {
-      if (window.innerWidth >= 768) return; // 桌面端不需要
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (window.innerWidth >= 768) return;
+      const dx = e.changedTouches[0].clientX - chatStartX;
+      const dy = e.changedTouches[0].clientY - chatStartY;
 
-      // 右滑返回（从左边边缘 30px 内开始）
-      if (dx > 60 && touchStartX < 30 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx > 60 && chatStartX < 30 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         this.showConvList();
       }
     });
@@ -134,7 +230,7 @@ const ChatView = {
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">👋</div>
-          <p><strong>欢迎使用 AI 聊天伴侣</strong></p>
+          <p><strong>欢迎使用仰止</strong></p>
           <p style="margin-top:8px;">
             我是你的 AI 伙伴，我会：<br>
             🧠 记住你告诉我的事<br>
@@ -145,11 +241,11 @@ const ChatView = {
             开始聊天 →
           </button>
         </div>`;
-      // 绑定欢迎按钮
-      setTimeout(() => {
-        const btn = document.getElementById('btn-welcome-start');
-        if (btn) btn.addEventListener('click', () => this.newChat());
-      }, 100);
+      // 事件委托：通过容器监听欢迎按钮点击
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('#btn-welcome-start');
+        if (btn) this.newChat();
+      });
       return;
     }
 
@@ -246,17 +342,36 @@ const ChatView = {
    * 发送消息
    */
   async sendMessage() {
-    if (this.isStreaming) return;
+    if (this.isStreaming || this._savingInProgress) return;
+
+    // 网络预检
+    if (!navigator.onLine) {
+      Toast.error('网络已断开，请检查连接');
+      return;
+    }
 
     const input = Render.$('#user-input');
     const content = input.value.trim();
-    if (!content) return;
+    const hasAttachment = !!OCR.getPendingFile();
+
+    // 至少需要文字或图片之一
+    if (!content && !hasAttachment) return;
+
+    // 输入长度限制
+    const MAX_INPUT = 10000;
+    if (content.length > MAX_INPUT) {
+      Toast.error(`消息过长（${content.length}字），请限制在${MAX_INPUT}字以内`);
+      return;
+    }
 
     if (!Config.isReady()) {
       Toast.error('请先在设置中配置 API Key');
-      document.querySelector('[data-tab="settings"]').click();
+      document.querySelector('[data-tab="settings"]')?.click();
       return;
     }
+
+    // ★ 提前设置流式标志，防止快速双击发送两条消息
+    this.isStreaming = true;
 
     // 确保有当前对话
     if (!this.currentConvId) {
@@ -269,6 +384,10 @@ const ChatView = {
       }
       Render.$('#chat-title').textContent = conv.title;
     }
+
+    // ★ 提前捕获当前对话ID，确保 try/catch 都能访问，停止时也能正确保存
+    const activeConvId = this.currentConvId;
+    this._streamingConvId = activeConvId;
 
     input.value = '';
     input.style.height = 'auto';
@@ -292,9 +411,33 @@ const ChatView = {
         }
       }
 
-      // 保存用户消息
-      const userMsg = await Conversations.addMessage(this.currentConvId, 'user', content);
+      // 纯图片消息：添加占位文本，让 AI 理解上下文
+      const contextContent = processedContent || (hasAttachment ? '[用户发送了一张图片]' : '');
+
+      // 构建附件数据
+      let attachments = null;
+      const pendingFile = OCR.getPendingFile();
+      if (pendingFile) {
+        const dataUrl = await this._fileToDataUrl(pendingFile);
+        attachments = [{
+          id: Security.uuid(),
+          type: pendingFile.type,
+          name: pendingFile.name || 'screenshot.png',
+          dataUrl: dataUrl,
+          ocrText: '',
+        }];
+      }
+
+      // 保存用户消息（含附件和发言人）
+      const userMsg = await Conversations.addMessage(activeConvId, 'user', content, {
+        attachments,
+        senderName: this._pendingSenderName || null,
+      });
+      this._pendingSenderName = null;
       this._appendMessageBubble(userMsg);
+
+      // 清除 OCR 预览
+      OCR.clearPreview();
 
       // 清除空状态
       const emptyState = Render.$('#message-list .empty-state');
@@ -304,11 +447,10 @@ const ChatView = {
       Render.$('#typing-indicator').classList.remove('hidden');
       Render.scrollToBottom(Render.$('#message-list'));
 
-      // 构建上下文
-      const context = await this._buildContext(processedContent);
+      // 构建上下文（传入已捕获的对话ID）
+      const context = await this._buildContext(contextContent, activeConvId);
 
       // 发送到 API
-      this.isStreaming = true;
       this.streamBuffer = '';
 
       const stream = API.sendMessage(context, {
@@ -332,34 +474,55 @@ const ChatView = {
         }
       }
 
+      // ★ 标记保存进行中：防止 stopGeneration 重复保存，也防止 sendMessage 重入
+      this._savingInProgress = true;
+
       // 保存 AI 回复
       if (this.streamBuffer) {
         const tokens = this.streamBuffer.length; // 简单估算
         const aiMsg = await Conversations.addMessage(
-          this.currentConvId, 'assistant', this.streamBuffer, { tokens }
+          activeConvId, 'assistant', this.streamBuffer, { tokens }
         );
         // 用保存的消息替换流式气泡的 ID
         if (this.streamBubble) {
           this.streamBubble.dataset.msgId = aiMsg.id;
         }
 
-        // 自动提取记忆
-        await this._autoMemorize();
+        // 自动提取记忆（使用捕获的对话ID，防止导航后提取错误对话）
+        await this._autoMemorize(activeConvId);
       }
 
     } catch (error) {
-      console.error('发送消息失败', error && error.message || '未知错误');
-      Toast.error(`发送失败：${error.message}`);
+      // 用户主动停止 — stopGeneration() 已处理清理和提示
+      const isAbort = error && (error.name === 'AbortError');
+      if (isAbort) return;
+
+      const errMsg = (error && error.message) || '未知错误';
+      console.error('发送消息失败', errMsg);
+      Toast.error(`发送失败：${errMsg}`);
+
+      // 保存流式中断前的部分内容（防止数据丢失）
+      if (this.streamBuffer && activeConvId && this.streamBubble) {
+        try {
+          await Conversations.addMessage(activeConvId, 'assistant',
+            this.streamBuffer + '\n\n*[网络中断]*', {});
+        } catch (saveErr) {
+          console.warn('保存中断内容失败', saveErr);
+        }
+      }
+
       // 移除空的流式气泡，显示重试按钮
       if (this.streamBubble && !this.streamBuffer) {
         this.streamBubble.remove();
       }
       // 在最后添加错误提示行（含重试按钮）
-      this._appendErrorRow(error.message, content);
+      this._appendErrorRow(errMsg, content);
     } finally {
       this.isStreaming = false;
+      this._savingInProgress = false;
       this.streamBuffer = '';
       this.streamBubble = null;
+      this._streamingConvId = null;
       Render.$('#typing-indicator').classList.add('hidden');
       this._setSendButtonMode('send');
       Render.$('#user-input').focus();
@@ -372,7 +535,7 @@ const ChatView = {
   /**
    * 构建 API 调用上下文
    */
-  async _buildContext(userMessage) {
+  async _buildContext(userMessage, convId) {
     const messages = [];
 
     // 1. 人物档案系统提示词
@@ -403,8 +566,8 @@ const ChatView = {
       messages.push({ role: 'system', content: memoryContext });
     }
 
-    // 4. 对话历史
-    const history = await Conversations.getMessages(this.currentConvId, 100);
+    // 4. 对话历史（使用传入的 convId 而非 this.currentConvId，防止异步期间导航导致空值）
+    const history = await Conversations.getMessages(convId || this.currentConvId, 100);
 
     // 压缩处理
     if (Compressor.needsCompression(history, Config.chat.compressThreshold)) {
@@ -441,16 +604,17 @@ const ChatView = {
   /**
    * 自动提取记忆
    */
-  async _autoMemorize() {
+  async _autoMemorize(convId) {
     if (!Config.memory.autoExtract) return;
+    if (!convId) return;
 
-    const messages = await Conversations.getMessages(this.currentConvId);
+    const messages = await Conversations.getMessages(convId, 100);
     const userMsgCount = messages.filter(m => m.role === 'user').length;
 
     // 每 N 轮对话提取一次
     if (userMsgCount > 0 && userMsgCount % Config.memory.extractThreshold === 0) {
       try {
-        const newFacts = await Facts.autoExtract(API, messages, this.currentConvId);
+        const newFacts = await Facts.autoExtract(API, messages, convId);
         if (newFacts.length > 0) {
           console.log(`自动提取了 ${newFacts.length} 条新记忆`, newFacts);
         }
@@ -468,6 +632,55 @@ const ChatView = {
     const row = Render.el('div', `msg-row ${msg.role}`, { 'data-msg-id': msg.id });
 
     const bubble = Render.el('div', 'msg-bubble');
+
+    // 多选复选框（初始由 CSS display:none 隐藏，select-mode 时 display:flex）
+    const checkboxDiv = Render.el('div', 'select-checkbox', {}, [
+      Render.el('input', '', {
+        type: 'checkbox',
+        onclick: (e) => {
+          e.preventDefault();  // 阻止原生 toggle，统一由 CopyManager 管理
+          e.stopPropagation();
+          CopyManager.toggleMessage(msg.id);
+          const isSelected = CopyManager.selectedIds.has(msg.id);
+          row.classList.toggle('selected', isSelected);
+          e.target.checked = isSelected;
+        },
+      }),
+    ]);
+    bubble.appendChild(checkboxDiv);
+
+    // 消息行点击（多选模式下切换选中）
+    row.addEventListener('click', (e) => {
+      if (CopyManager.mode === 'select' && !e.target.closest('button')) {
+        CopyManager.toggleMessage(msg.id);
+        row.classList.toggle('selected', CopyManager.selectedIds.has(msg.id));
+      }
+    });
+
+    // 发言人标签（外部聊天记录导入时显示）
+    if (msg.senderName && msg.role !== 'user' && msg.role !== 'assistant') {
+      bubble.appendChild(Render.el('div', 'msg-sender-label', {
+        text: `👤 ${msg.senderName}`,
+      }));
+    }
+
+    // 附件图片
+    if (msg.attachments && msg.attachments.length > 0) {
+      for (const att of msg.attachments) {
+        if (att.type && att.type.startsWith('image/')) {
+          const img = Render.el('img', 'msg-attachment-img', {
+            src: att.dataUrl,
+            alt: att.ocrText || '截图',
+            onclick: (e) => {
+              e.stopPropagation();
+              this._showImageViewer(att.dataUrl);
+            },
+          });
+          img.style.cssText = 'max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;margin-bottom:6px;display:block;';
+          bubble.appendChild(img);
+        }
+      }
+    }
 
     // 技能标记
     if (msg.skillOrigin) {
@@ -568,6 +781,14 @@ const ChatView = {
    */
   async deleteConversation(convId) {
     if (!confirm('确定删除这个对话吗？')) return;
+
+    // 如果正在流式输出到该对话，先中止。清除 _streamingConvId 防止
+    // stopGeneration 的 fire-and-forget 保存与 remove 产生竞态孤儿消息
+    if (this.isStreaming && this._streamingConvId === convId) {
+      this._streamingConvId = null;
+      this.stopGeneration();
+    }
+
     await Conversations.remove(convId);
     if (this.currentConvId === convId) {
       this.currentConvId = null;
@@ -587,24 +808,24 @@ const ChatView = {
   },
 
   /**
-   * 切换聊天菜单
-   */
-  /**
    * 停止当前生成
    */
   stopGeneration() {
-    if (this.isStreaming) {
+    // _savingInProgress 为 true 表示流已完成、正在正常保存，跳过避免重复写入
+    if (this.isStreaming && !this._savingInProgress) {
+      const convId = this._streamingConvId; // 使用流式开始时的对话ID，防止桌面端切换对话后保存到错误位置
       API.abort();
       this.isStreaming = false;
       // 保留已生成的内容
-      if (this.streamBuffer && this.streamBubble) {
+      if (this.streamBuffer && this.streamBubble && convId) {
         const content = this.streamBuffer + '\n\n*[已停止生成]*';
         const contentDiv = this.streamBubble.querySelector('.msg-content');
         if (contentDiv) {
           contentDiv.innerHTML = Render.simpleMarkdown(content);
         }
-        // 保存部分回复
-        Conversations.addMessage(this.currentConvId, 'assistant', this.streamBuffer, {});
+        // 保存部分回复（异步但非关键，失败不阻塞）
+        Conversations.addMessage(convId, 'assistant', this.streamBuffer, {})
+          .catch(e => console.warn('保存部分回复失败', e));
       }
       this.streamBuffer = '';
       this.streamBubble = null;
@@ -654,6 +875,9 @@ const ChatView = {
     Render.scrollToBottom(list);
   },
 
+  /**
+   * 切换聊天菜单
+   */
   toggleChatMenu(e) {
     // 移除已有菜单
     const existing = document.querySelector('.chat-menu-dropdown');
@@ -663,6 +887,18 @@ const ChatView = {
     }
 
     const menu = Render.el('div', 'chat-menu-dropdown', {}, [
+      Render.el('button', '', {
+        text: '📋 复制全部对话',
+        onclick: async () => {
+          menu.remove();
+          try {
+            const messages = await Conversations.getMessages(this.currentConvId, 500);
+            await CopyManager.copyAllConversation(messages);
+          } catch (e) {
+            Toast.error('复制失败：' + (e.message || '未知错误'));
+          }
+        },
+      }),
       Render.el('button', '', {
         text: '📝 重命名对话',
         onclick: async () => {
@@ -705,6 +941,8 @@ const ChatView = {
         onclick: () => {
           if (this.currentConvId) {
             this.deleteConversation(this.currentConvId);
+          } else {
+            Toast.error('无法删除：未选择对话');
           }
           menu.remove();
         },
@@ -712,6 +950,114 @@ const ChatView = {
     ]);
 
     document.body.appendChild(menu);
+  },
+
+  /**
+   * 通过 msgId 查找消息对象（从 DOM 反向查找）
+   */
+  _findMsgById(msgId) {
+    // 简单方案：从当前渲染的消息列表中匹配
+    const row = document.querySelector(`[data-msg-id="${msgId}"]`);
+    if (!row) return null;
+    const contentEl = row.querySelector('.msg-content');
+    return { id: msgId, content: contentEl?.textContent || '', role: row.classList.contains('user') ? 'user' : 'assistant' };
+  },
+
+  /**
+   * 检测发言人（手动触发或长截图OCR后自动触发）
+   */
+  async _detectSpeakers() {
+    const input = Render.$('#user-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // 隐藏提示条
+    document.getElementById('speaker-hint-chip')?.classList.add('hidden');
+
+    const result = SpeakerDetect.detect(text);
+
+    if (result.segments.length === 0) {
+      Toast.info('未检测到聊天记录格式');
+      return;
+    }
+
+    if (result.confidence >= 0.85) {
+      // 高置信度：直接确认
+      input.value = SpeakerDetect.formatForSend(result.segments);
+      this._pendingSenderName = result.segments[0]?.speaker || null;
+      Toast.success(`已识别 ${result.segments.length} 条消息（置信度 ${Math.round(result.confidence * 100)}%）`);
+    } else if (result.confidence >= 0.5) {
+      // 中置信度：AI 辅助 + 用户确认
+      Toast.info('正在 AI 辅助识别...');
+      try {
+        const aiResult = await SpeakerDetect.aiAssist(API, text);
+        const merged = aiResult.length > 0 ? aiResult : result.segments;
+        const confirmed = await SpeakerDetect.confirmWithUser(merged);
+        if (confirmed) {
+          input.value = SpeakerDetect.formatForSend(confirmed);
+          this._pendingSenderName = confirmed[0]?.speaker || null;
+          Toast.success('发言人已确认');
+        }
+      } catch {
+        // AI 失败，直接用户确认
+        const confirmed = await SpeakerDetect.confirmWithUser(result.segments);
+        if (confirmed) {
+          input.value = SpeakerDetect.formatForSend(confirmed);
+          this._pendingSenderName = confirmed[0]?.speaker || null;
+        }
+      }
+    } else {
+      // 低置信度：用户逐条确认
+      const confirmed = await SpeakerDetect.confirmWithUser(result.segments);
+      if (confirmed) {
+        input.value = SpeakerDetect.formatForSend(confirmed);
+        this._pendingSenderName = confirmed[0]?.speaker || null;
+      }
+    }
+  },
+
+  /**
+   * 全屏查看图片
+   */
+  _showImageViewer(dataUrl) {
+    // 锁定背景滚动
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const viewer = document.createElement('div');
+    viewer.id = 'image-viewer';
+    viewer.innerHTML = `
+      <img src="${dataUrl}">
+      <button class="close-btn">✕</button>
+    `;
+
+    const close = () => {
+      viewer.remove();
+      document.body.style.overflow = origOverflow;
+      document.removeEventListener('keydown', escHandler);
+    };
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') close();
+    };
+
+    document.addEventListener('keydown', escHandler);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer || e.target.tagName === 'BUTTON') close();
+    });
+    document.body.appendChild(viewer);
+  },
+
+  /**
+   * File → base64 DataURL
+   */
+  _fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(file);
+    });
   },
 };
 
