@@ -1,0 +1,350 @@
+/* ============================================
+   chat.css — 聊天气泡、输入框、对话列表
+   ============================================ */
+
+/* --- 对话列表 --- */
+#conv-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  flex-shrink: 0;
+}
+.list-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+}
+#btn-new-chat {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+#btn-new-chat:active {
+  transform: scale(0.9);
+}
+
+#conversations {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.conv-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background var(--transition);
+  gap: 10px;
+}
+.conv-item:hover,
+.conv-item.active {
+  background: var(--bg-hover);
+}
+.conv-item.active {
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+.conv-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.conv-info {
+  flex: 1;
+  min-width: 0;
+}
+.conv-title {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.conv-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.conv-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.conv-delete {
+  opacity: 0;
+  font-size: 14px;
+  color: var(--danger);
+  padding: 4px 8px;
+  transition: opacity var(--transition);
+}
+.conv-item:hover .conv-delete {
+  opacity: 1;
+}
+
+/* --- 聊天窗口 --- */
+#chat-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.view-detail { }
+#chat-window.hidden {
+  display: none;
+}
+
+#chat-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+#chat-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 16px;
+  text-align: center;
+}
+#btn-back, #btn-chat-menu {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background var(--transition);
+}
+#btn-back:active, #btn-chat-menu:active {
+  background: var(--bg-hover);
+}
+
+/* --- 消息列表 --- */
+#message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  scroll-behavior: smooth;
+}
+.msg-row {
+  display: flex;
+  margin-bottom: 16px;
+  animation: fadeIn 0.25s ease;
+}
+.msg-row.user {
+  justify-content: flex-end;
+}
+.msg-row.assistant {
+  justify-content: flex-start;
+}
+
+.msg-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  font-size: 15px;
+  line-height: 1.55;
+  word-break: break-word;
+  position: relative;
+}
+.msg-row.user .msg-bubble {
+  background: var(--bg-bubble-user);
+  color: var(--text-bubble-user);
+  border-bottom-right-radius: 4px;
+}
+.msg-row.assistant .msg-bubble {
+  background: var(--bg-bubble-ai);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.msg-bubble p { margin-bottom: 6px; }
+.msg-bubble p:last-child { margin-bottom: 0; }
+.msg-bubble code {
+  background: rgba(0,0,0,0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.msg-bubble pre {
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.msg-bubble pre code {
+  background: none;
+  padding: 0;
+}
+
+.msg-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* 技能标记 */
+.msg-skill-badge {
+  display: inline-block;
+  font-size: 10px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+
+/* --- 输入中动画 --- */
+#typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 20px;
+}
+#typing-indicator .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: dotPulse 1.2s infinite;
+}
+#typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+#typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* --- 输入区域 --- */
+#input-area {
+  padding: 8px 12px;
+  padding-bottom: max(8px, var(--safe-bottom));
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#active-skills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  min-height: 0;
+}
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+.skill-chip .chip-close {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+#btn-skill-quick {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+#btn-skill-quick:active { background: var(--bg-hover); }
+
+#user-input {
+  flex: 1;
+  resize: none;
+  background: var(--bg-input);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.4;
+  max-height: 120px;
+  min-height: 36px;
+}
+#user-input::placeholder {
+  color: var(--text-muted);
+}
+
+#btn-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+#btn-send:active {
+  transform: scale(0.9);
+}
+#btn-send:disabled {
+  background: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* 聊天菜单下拉 */
+.chat-menu-dropdown {
+  position: absolute;
+  top: calc(var(--topbar-height) + 48px);
+  right: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  z-index: 100;
+  min-width: 140px;
+  animation: fadeIn 0.15s ease;
+}
+.chat-menu-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 14px;
+  transition: background var(--transition);
+}
+.chat-menu-dropdown button:hover {
+  background: var(--bg-hover);
+}
+.chat-menu-dropdown button:first-child {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.chat-menu-dropdown button:last-child {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.chat-menu-dropdown button.danger {
+  color: var(--danger);
+}

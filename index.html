@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="AI 聊天伴侣 — 有记忆、有温度的智能助手">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+  <title>AI 聊天伴侣</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/chat.css">
+  <link rel="stylesheet" href="css/skills.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- ========== 应用容器 ========== -->
+  <div id="app">
+
+    <!-- 顶部状态栏 -->
+    <header id="top-bar">
+      <span id="top-title">AI 聊天伴侣</span>
+      <span id="connection-dot" class="dot-offline" title="连接状态"></span>
+    </header>
+
+    <!-- 主内容区（Tab 切换） -->
+    <main id="main-content">
+      <!-- 聊天 Tab -->
+      <section id="tab-chat" class="tab-page active">
+        <div id="chat-container">
+          <div id="conv-list" class="view-list">
+            <div class="list-header">
+              <h2>对话</h2>
+              <button id="btn-new-chat" class="btn-icon" title="新建对话">＋</button>
+            </div>
+            <div id="conversations"></div>
+          </div>
+          <div id="chat-window" class="view-detail hidden">
+            <div id="chat-header">
+              <button id="btn-back" class="btn-icon">←</button>
+              <span id="chat-title">新对话</span>
+              <button id="btn-chat-menu" class="btn-icon">⋯</button>
+            </div>
+            <div id="message-list"></div>
+            <div id="typing-indicator" class="hidden">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+            <div id="input-area">
+              <div id="active-skills"></div>
+              <div class="input-row">
+                <button id="btn-skill-quick" class="btn-icon" title="技能">✨</button>
+                <textarea id="user-input" rows="1" placeholder="输入消息..." enterkeyhint="send"></textarea>
+                <button id="btn-send" class="btn-send" title="发送">➤</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 技能 Tab -->
+      <section id="tab-skills" class="tab-page">
+        <div class="page-header"><h2>技能中心</h2></div>
+        <div id="skill-grid"></div>
+      </section>
+
+      <!-- 记忆 Tab -->
+      <section id="tab-memory" class="tab-page">
+        <div class="page-header"><h2>我的记忆</h2></div>
+        <div id="memory-search">
+          <input type="text" id="memory-search-input" placeholder="搜索记忆...">
+        </div>
+        <div id="memory-stats"></div>
+        <div id="memory-list"></div>
+      </section>
+
+      <!-- 设置 Tab -->
+      <section id="tab-settings" class="tab-page">
+        <div class="page-header"><h2>设置</h2></div>
+        <div id="settings-content"></div>
+      </section>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-tab="chat">💬<span>聊天</span></button>
+      <button class="nav-btn" data-tab="skills">🧰<span>技能</span></button>
+      <button class="nav-btn" data-tab="memory">🧠<span>记忆</span></button>
+      <button class="nav-btn" data-tab="settings">⚙️<span>设置</span></button>
+    </nav>
+
+  </div>
+
+  <!-- Toast 容器 -->
+  <div id="toast-container"></div>
+
+  <!-- 模态弹窗容器 -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box"></div>
+  </div>
+
+  <!-- JS 模块 -->
+  <script type="module" src="js/config.js"></script>
+  <script type="module" src="js/utils/token.js"></script>
+  <script type="module" src="js/utils/security.js"></script>
+  <script type="module" src="js/utils/compress.js"></script>
+  <script type="module" src="js/memory/store.js"></script>
+  <script type="module" src="js/memory/conversations.js"></script>
+  <script type="module" src="js/memory/facts.js"></script>
+  <script type="module" src="js/memory/memory-bridge.js"></script>
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/skills/registry.js"></script>
+  <script type="module" src="js/skills/rewrite.js"></script>
+  <script type="module" src="js/skills/translate.js"></script>
+  <script type="module" src="js/skills/tone.js"></script>
+  <script type="module" src="js/skills/empathy.js"></script>
+  <script type="module" src="js/skills/analyze.js"></script>
+  <script type="module" src="js/skills/recall.js"></script>
+  <script type="module" src="js/skills/love-advisor.js"></script>
+  <script type="module" src="js/skills/summarize.js"></script>
+  <script type="module" src="js/ui/render.js"></script>
+  <script type="module" src="js/ui/toast.js"></script>
+  <script type="module" src="js/ui/chat-view.js"></script>
+  <script type="module" src="js/ui/skill-panel.js"></script>
+  <script type="module" src="js/ui/memory-view.js"></script>
+  <script type="module" src="js/ui/settings.js"></script>
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

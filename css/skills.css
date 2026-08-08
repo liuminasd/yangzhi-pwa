@@ -1,0 +1,83 @@
+/* ============================================
+   skills.css — 技能面板、技能卡片
+   ============================================ */
+
+/* --- 技能网格 --- */
+#skill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+@media (min-width: 480px) {
+  #skill-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 768px) {
+  #skill-grid {
+    grid-template-columns: repeat(4, 1fr);
+    padding: 0 24px 24px;
+  }
+}
+
+.skill-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.skill-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.skill-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+.skill-card .skill-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+.skill-card .skill-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.skill-card .skill-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.skill-card .skill-category {
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.skill-card .skill-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* --- 技能触发词高亮 --- */
+.skill-triggers {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}

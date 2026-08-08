@@ -1,0 +1,135 @@
+/* ============================================
+   layout.css — 移动端布局、底部导航、Tab切换
+   ============================================ */
+
+/* --- 应用容器 --- */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* --- 顶部状态栏 --- */
+#top-bar {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+#top-title {
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+}
+#connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background var(--transition);
+}
+#connection-dot.dot-online  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+#connection-dot.dot-offline { background: var(--text-muted); }
+
+/* --- 主内容区 --- */
+#main-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.tab-page {
+  display: none;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+}
+.tab-page.active {
+  display: flex;
+}
+
+.page-header {
+  padding: 16px;
+  flex-shrink: 0;
+}
+.page-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* --- 底部导航 --- */
+#bottom-nav {
+  height: calc(var(--nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  font-size: 22px;
+  color: var(--text-muted);
+  transition: color var(--transition), transform var(--transition);
+  min-width: 56px;
+}
+.nav-btn span {
+  font-size: 10px;
+  line-height: 1.2;
+}
+.nav-btn.active {
+  color: var(--accent);
+  transform: scale(1.05);
+}
+.nav-btn:active {
+  transform: scale(0.95);
+}
+
+/* --- 响应式：桌面宽屏布局 --- */
+@media (min-width: 768px) {
+  #app {
+    max-width: 100%;
+  }
+  #top-bar {
+    padding: 0 24px;
+  }
+
+  /* 聊天页：侧边栏 + 聊天窗口 双栏布局 */
+  #chat-container {
+    display: flex;
+    height: 100%;
+  }
+  #conv-list {
+    width: 300px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+  #chat-window {
+    flex: 1;
+  }
+  #chat-window.hidden {
+    display: flex !important; /* 桌面端始终显示聊天窗口 */
+  }
+  #btn-back {
+    display: none; /* 桌面端不需要返回按钮 */
+  }
+
+  /* 底部导航改为侧边图标导航或保持底部 */
+  #bottom-nav {
+    justify-content: center;
+    gap: 32px;
+  }
+}
