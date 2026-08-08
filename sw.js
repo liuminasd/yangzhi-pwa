@@ -31,6 +31,7 @@ const ASSETS_TO_CACHE = [
   './js/skills/recall.js',
   './js/skills/love-advisor.js',
   './js/skills/summarize.js',
+  './js/skills/brainstorm.js',
   './js/ui/render.js',
   './js/ui/toast.js',
   './js/ui/chat-view.js',

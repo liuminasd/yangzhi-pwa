@@ -264,6 +264,53 @@ ${messages.slice(-20).map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.con
   },
 
   /**
+   * 手动添加记忆（用户明确说"记住xxx"时调用）
+   */
+  async explicitAdd(factText, convId = null) {
+    // 自动检测类别
+    const category = this._detectCategory(factText);
+    const importance = 1.0; // 用户明确要求的记忆，设为最高重要性
+
+    // 去重检查
+    const existing = await this.search(factText, 3);
+    const isDuplicate = existing.some(e =>
+      e.fact === factText ||
+      this._similarity(e.fact, factText) > 0.8
+    );
+    if (isDuplicate) {
+      // 更新已有记忆的重要性
+      const fact = existing[0];
+      await this.update(fact.id, { importance: Math.min(1, fact.importance + 0.2) });
+      return { fact, updated: true };
+    }
+
+    return { fact: await this.add(factText, category, importance, convId), updated: false };
+  },
+
+  /**
+   * 自动检测事实类别
+   */
+  _detectCategory(text) {
+    if (/我是|我叫|我的名字|我住在|我在|我的.*是|年龄|生日/.test(text)) return 'personal';
+    if (/喜欢|讨厌|偏好|习惯|经常|最爱|不喜欢/.test(text)) return 'preference';
+    if (/女朋友|男朋友|老婆|老公|对象|朋友|同事|家人|妈妈|爸爸/.test(text)) return 'relationship';
+    if (/计划|打算|目标|想[要做]|明天|下周|明年/.test(text)) return 'plan';
+    if (/发生|经历|去过|参加过|那天|当时/.test(text)) return 'event';
+    if (/知道|了解|学会|发现|认识|明白/.test(text)) return 'knowledge';
+    return 'other';
+  },
+
+  /**
+   * 获取记忆的源对话（跳转用）
+   */
+  async getSourceConversation(factId) {
+    const fact = await DB.get('facts', factId);
+    if (!fact || !fact.sourceConvId) return null;
+    const { default: Conversations } = await import('./conversations.js');
+    return await Conversations.get(fact.sourceConvId);
+  },
+
+  /**
    * 记忆衰减（清理长期未访问的低重要性事实）
    */
   async decayMaintenance(decayDays = 30) {

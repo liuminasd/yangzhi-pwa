@@ -266,6 +266,22 @@
   color: var(--danger);
 }
 
+/* 记忆详情展开面板 */
+.mem-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  animation: fadeIn 0.2s ease;
+}
+.mem-detail-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 2;
+}
+.mem-detail-info p {
+  margin: 2px 0;
+}
+
 /* 空状态 */
 .empty-state {
   display: flex;

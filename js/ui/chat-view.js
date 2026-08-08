@@ -31,8 +31,14 @@ const ChatView = {
    * 绑定事件
    */
   bindEvents() {
-    // 发送按钮
-    Render.$('#btn-send').addEventListener('click', () => this.sendMessage());
+    // 发送按钮（流式输出时变为停止按钮）
+    Render.$('#btn-send').addEventListener('click', () => {
+      if (this.isStreaming) {
+        this.stopGeneration();
+      } else {
+        this.sendMessage();
+      }
+    });
     // 输入框回车发送
     const input = Render.$('#user-input');
     input.addEventListener('keydown', (e) => {
@@ -61,6 +67,57 @@ const ChatView = {
       const menu = document.querySelector('.chat-menu-dropdown');
       if (menu && !e.target.closest('#btn-chat-menu')) {
         menu.remove();
+      }
+    });
+
+    // 移动端滑动手势
+    this._bindSwipeGestures();
+  },
+
+  /**
+   * 绑定移动端滑动手势
+   */
+  _bindSwipeGestures() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    // 对话列表左滑删除
+    Render.$('#conversations').addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    Render.$('#conversations').addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+
+      // 水平滑动超过 60px 且大于垂直滑动
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        const target = e.target.closest('.conv-item');
+        if (target && target.dataset.id) {
+          if (dx < 0) {
+            // 左滑删除
+            this.deleteConversation(target.dataset.id);
+          }
+        }
+      }
+    });
+
+    // 聊天窗口右滑返回（仅移动端）
+    const chatWindow = Render.$('#chat-window');
+    chatWindow.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    chatWindow.addEventListener('touchend', (e) => {
+      if (window.innerWidth >= 768) return; // 桌面端不需要
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+
+      // 右滑返回（从左边边缘 30px 内开始）
+      if (dx > 60 && touchStartX < 30 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        this.showConvList();
       }
     });
   },
@@ -214,7 +271,7 @@ const ChatView = {
 
     input.value = '';
     input.style.height = 'auto';
-    Render.$('#btn-send').disabled = true;
+    this._setSendButtonMode('stop');
 
     try {
       // 检测技能触发
@@ -292,16 +349,18 @@ const ChatView = {
     } catch (error) {
       console.error('发送消息失败', error);
       Toast.error(`发送失败：${error.message}`);
-      // 移除空的流式气泡
+      // 移除空的流式气泡，显示重试按钮
       if (this.streamBubble && !this.streamBuffer) {
         this.streamBubble.remove();
       }
+      // 在最后添加错误提示行（含重试按钮）
+      this._appendErrorRow(error.message, content);
     } finally {
       this.isStreaming = false;
       this.streamBuffer = '';
       this.streamBubble = null;
       Render.$('#typing-indicator').classList.add('hidden');
-      Render.$('#btn-send').disabled = false;
+      this._setSendButtonMode('send');
       Render.$('#user-input').focus();
 
       // 刷新对话列表
@@ -526,6 +585,71 @@ const ChatView = {
   /**
    * 切换聊天菜单
    */
+  /**
+   * 停止当前生成
+   */
+  stopGeneration() {
+    if (this.isStreaming) {
+      API.abort();
+      this.isStreaming = false;
+      // 保留已生成的内容
+      if (this.streamBuffer && this.streamBubble) {
+        const content = this.streamBuffer + '\n\n*[已停止生成]*';
+        const contentDiv = this.streamBubble.querySelector('.msg-content');
+        if (contentDiv) {
+          contentDiv.innerHTML = Render.simpleMarkdown(content);
+        }
+        // 保存部分回复
+        Conversations.addMessage(this.currentConvId, 'assistant', this.streamBuffer, {});
+      }
+      this.streamBuffer = '';
+      this.streamBubble = null;
+      Render.$('#typing-indicator').classList.add('hidden');
+      this._setSendButtonMode('send');
+      Render.$('#user-input').focus();
+      Toast.info('已停止生成');
+    }
+  },
+
+  /**
+   * 切换发送按钮模式
+   */
+  _setSendButtonMode(mode) {
+    const btn = Render.$('#btn-send');
+    if (mode === 'stop') {
+      btn.textContent = '■';
+      btn.style.background = 'var(--danger)';
+      btn.title = '停止生成';
+    } else {
+      btn.textContent = '➤';
+      btn.style.background = 'var(--accent)';
+      btn.title = '发送';
+    }
+  },
+
+  /**
+   * 显示错误行含重试按钮
+   */
+  _appendErrorRow(errorMsg, originalInput) {
+    const list = Render.$('#message-list');
+    const row = Render.el('div', 'msg-row assistant', {}, [
+      Render.el('div', 'msg-bubble', { style: 'border-left: 3px solid var(--danger);' }, [
+        Render.el('div', '', { text: `❌ ${errorMsg}` }),
+        Render.el('button', 'btn-primary', {
+          text: '🔄 重试',
+          style: 'margin-top:8px; font-size:12px; padding:6px 14px;',
+          onclick: () => {
+            row.remove();
+            Render.$('#user-input').value = originalInput;
+            this.sendMessage();
+          },
+        }),
+      ]),
+    ]);
+    list.appendChild(row);
+    Render.scrollToBottom(list);
+  },
+
   toggleChatMenu(e) {
     // 移除已有菜单
     const existing = document.querySelector('.chat-menu-dropdown');
