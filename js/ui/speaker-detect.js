@@ -77,8 +77,14 @@ const SpeakerDetect = {
   _heuristicParse(text) {
     let bestResult = { segments: [], confidence: 0, method: 'none' };
 
+    // 大文本安全截断（防止正则回溯，保留前 500KB 足够识别所有发言人）
+    const safeText = text.length > 500 * 1024 ? text.slice(0, 500 * 1024) : text;
+
     for (const pattern of this.PATTERNS) {
-      const matches = [...text.matchAll(pattern.regex)];
+      // 跳过明显不匹配的模式：wechat-date 需要中文日期标记
+      if (pattern.name === 'wechat-date' && !safeText.includes('年')) continue;
+
+      const matches = [...safeText.matchAll(pattern.regex)];
       if (matches.length >= 2) {
         const segments = matches.map(m => ({
           ...pattern.extractMatch(m),

@@ -65,6 +65,7 @@
             <div id="message-list"></div>
             <div id="typing-indicator" class="hidden">
               <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              <span class="typing-text">AI 正在输入...</span>
             </div>
             <div id="input-area">
               <div id="active-skills"></div>
@@ -87,8 +88,12 @@
                 <button id="btn-attach-image" class="btn-icon" title="发送截图（支持长截图）">🖼</button>
                 <button id="btn-detect-speaker" class="btn-icon" title="识别发言人">👥</button>
                 <button id="btn-skill-quick" class="btn-icon" title="技能">✨</button>
-                <textarea id="user-input" rows="1" placeholder="输入消息，支持粘贴截图..." enterkeyhint="send"></textarea>
+                <textarea id="user-input" rows="1" placeholder="输入消息，Enter 发送 / Shift+Enter 换行..." enterkeyhint="send"></textarea>
                 <button id="btn-send" class="btn-send" title="发送">➤</button>
+              </div>
+              <div id="input-hint" style="display:flex;justify-content:space-between;padding:4px 12px 0;font-size:10px;color:var(--text-muted);">
+                <span id="char-count"></span>
+                <span>Enter 发送 · Shift+Enter 换行</span>
               </div>
             </div>
             <!-- 隐藏的文件选择器 -->

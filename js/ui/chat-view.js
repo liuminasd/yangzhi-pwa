@@ -78,10 +78,28 @@ const ChatView = {
         this.sendMessage();
       }
     });
-    // 自动调整输入框高度
+    // 自动调整输入框高度 + 检测手动编辑以清除待定发言人 + 字数统计
     input.addEventListener('input', () => {
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      // 用户手动编辑（非发言方识别程序化设置）时，清除待定发言人标记
+      if (!this._programmaticInput && this._pendingSenderName) {
+        this._pendingSenderName = null;
+        document.getElementById('speaker-hint-chip')?.classList.add('hidden');
+      }
+      // 更新字数统计 + 按钮状态
+      const countEl = document.getElementById('char-count');
+      const sendBtn = Render.$('#btn-send');
+      if (countEl) {
+        const len = input.value.length;
+        const MAX = 10000;
+        countEl.textContent = len > 0 ? `${len} / ${MAX}` : '';
+        countEl.style.color = len > MAX * 0.9 ? 'var(--warning)' : len > MAX ? 'var(--danger)' : '';
+        // 有内容时按钮发光
+        if (sendBtn) {
+          sendBtn.classList.toggle('has-content', len > 0);
+        }
+      }
     });
     // 返回按钮
     Render.$('#btn-back').addEventListener('click', () => this.showConvList());
@@ -175,6 +193,13 @@ const ChatView = {
         }
       }, 100);
     });
+
+    // 消息列表滚动检测：用户手动上滑时暂停自动滚动，滚回底部时恢复
+    const msgList = Render.$('#message-list');
+    msgList.addEventListener('scroll', () => {
+      const distFromBottom = msgList.scrollHeight - msgList.scrollTop - msgList.clientHeight;
+      msgList._userScrolledUp = distFromBottom > 80;
+    });
   },
 
   /**
@@ -252,27 +277,52 @@ const ChatView = {
     }
 
     container.innerHTML = '';
+    // 按日期分组
+    const now = Date.now();
+    const DAY = 86400000;
+    const groups = [
+      { label: '今天', min: now - DAY, max: now },
+      { label: '昨天', min: now - 2 * DAY, max: now - DAY },
+      { label: '本周', min: now - 7 * DAY, max: now - 2 * DAY },
+      { label: '更早', min: 0, max: now - 7 * DAY },
+    ];
+    const grouped = {};
     for (const conv of convs) {
-      const preview = await Conversations.getPreview(conv.id);
-      const item = Render.el('div', 'conv-item', {
-        'data-id': conv.id,
-        onclick: () => this.openChat(conv.id),
-      }, [
-        Render.el('div', 'conv-avatar', {}, ['💬']),
-        Render.el('div', 'conv-info', {}, [
-          Render.el('div', 'conv-title truncate', { text: conv.title }),
-          Render.el('div', 'conv-preview truncate', { text: preview }),
-        ]),
-        Render.el('div', 'conv-time', { text: Security.formatTime(conv.updatedAt) }),
-        Render.el('button', 'conv-delete', {
-          text: '✕',
-          onclick: (e) => {
-            e.stopPropagation();
-            this.deleteConversation(conv.id);
-          },
-        }),
-      ]);
-      container.appendChild(item);
+      const g = groups.find(g => conv.updatedAt >= g.min && conv.updatedAt < g.max) || groups[3];
+      if (!grouped[g.label]) grouped[g.label] = [];
+      grouped[g.label].push(conv);
+    }
+
+    for (const { label } of groups) {
+      const groupConvs = grouped[label];
+      if (!groupConvs || groupConvs.length === 0) continue;
+
+      // 日期分组标题
+      const header = Render.el('div', 'conv-date-header', { text: label });
+      container.appendChild(header);
+
+      for (const conv of groupConvs) {
+        const preview = await Conversations.getPreview(conv.id);
+        const item = Render.el('div', 'conv-item', {
+          'data-id': conv.id,
+          onclick: () => this.openChat(conv.id),
+        }, [
+          Render.el('div', 'conv-avatar', {}, ['💬']),
+          Render.el('div', 'conv-info', {}, [
+            Render.el('div', 'conv-title truncate', { text: conv.title }),
+            Render.el('div', 'conv-preview truncate', { text: preview }),
+          ]),
+          Render.el('div', 'conv-time', { text: Security.formatTime(conv.updatedAt) }),
+          Render.el('button', 'conv-delete', {
+            text: '✕',
+            onclick: (e) => {
+              e.stopPropagation();
+              this.deleteConversation(conv.id);
+            },
+          }),
+        ]);
+        container.appendChild(item);
+      }
     }
   },
 
@@ -393,17 +443,17 @@ const ChatView = {
 
     input.value = '';
     input.style.height = 'auto';
+    // 重置字数统计 + 按钮状态
+    const countEl = document.getElementById('char-count');
+    if (countEl) countEl.textContent = '';
+    const sendBtn = Render.$('#btn-send');
+    if (sendBtn) sendBtn.classList.remove('has-content');
     this._setSendButtonMode('stop');
 
     try {
       // 所有技能已由 Registry.activateAll() 自动激活，无需触发词检测
-      // 预处理：所有活跃技能的 preprocess 链
-      let processedContent = content;
-      for (const skill of Registry.getActive()) {
-        if (skill.preprocess) {
-          processedContent = await skill.preprocess(processedContent);
-        }
-      }
+      // 预处理：统一通过 Registry.preprocess() 链式处理用户输入
+      const processedContent = await Registry.preprocess(content);
 
       // 纯图片消息：添加占位文本，让 AI 理解上下文
       const contextContent = processedContent || (hasAttachment ? '[用户发送了一张图片]' : '');
@@ -437,9 +487,9 @@ const ChatView = {
       const emptyState = Render.$('#message-list .empty-state');
       if (emptyState) emptyState.remove();
 
-      // 显示输入中动画
+      // 显示输入中动画（发送消息后强制滚动到底部）
       Render.$('#typing-indicator').classList.remove('hidden');
-      Render.scrollToBottom(Render.$('#message-list'));
+      Render.scrollToBottom(Render.$('#message-list'), true);
 
       // 构建上下文（传入已捕获的对话ID）
       const context = await this._buildContext(contextContent, activeConvId);
@@ -581,12 +631,11 @@ const ChatView = {
     }
 
     // 移除历史中最后一条用户消息（因为刚刚已保存到DB，避免重复）
-    // 然后用预处理后的版本替换
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        messages.splice(i, 1);
-        break;
-      }
+    // 只检查最后一条：正常对话中刚保存的用户消息一定在末尾，
+    // 避免导入场景下连续 user 消息时误删更早的消息
+    const lastIdx = messages.length - 1;
+    if (lastIdx >= 0 && messages[lastIdx].role === 'user') {
+      messages.splice(lastIdx, 1);
     }
 
     // 5. 添加当前用户消息
@@ -975,10 +1024,17 @@ const ChatView = {
       return;
     }
 
+    // 标记程序化输入（防止 input 事件处理器误清除 _pendingSenderName）
+    const setInput = (segments) => {
+      this._programmaticInput = true;
+      input.value = SpeakerDetect.formatForSend(segments);
+      this._pendingSenderName = segments[0]?.speaker || null;
+      this._programmaticInput = false;
+    };
+
     if (result.confidence >= 0.85) {
       // 高置信度：直接确认
-      input.value = SpeakerDetect.formatForSend(result.segments);
-      this._pendingSenderName = result.segments[0]?.speaker || null;
+      setInput(result.segments);
       Toast.success(`已识别 ${result.segments.length} 条消息（置信度 ${Math.round(result.confidence * 100)}%）`);
     } else if (result.confidence >= 0.5) {
       // 中置信度：AI 辅助 + 用户确认
@@ -988,24 +1044,21 @@ const ChatView = {
         const merged = aiResult.length > 0 ? aiResult : result.segments;
         const confirmed = await SpeakerDetect.confirmWithUser(merged);
         if (confirmed) {
-          input.value = SpeakerDetect.formatForSend(confirmed);
-          this._pendingSenderName = confirmed[0]?.speaker || null;
+          setInput(confirmed);
           Toast.success('发言人已确认');
         }
       } catch {
         // AI 失败，直接用户确认
         const confirmed = await SpeakerDetect.confirmWithUser(result.segments);
         if (confirmed) {
-          input.value = SpeakerDetect.formatForSend(confirmed);
-          this._pendingSenderName = confirmed[0]?.speaker || null;
+          setInput(confirmed);
         }
       }
     } else {
       // 低置信度：用户逐条确认
       const confirmed = await SpeakerDetect.confirmWithUser(result.segments);
       if (confirmed) {
-        input.value = SpeakerDetect.formatForSend(confirmed);
-        this._pendingSenderName = confirmed[0]?.speaker || null;
+        setInput(confirmed);
       }
     }
   },

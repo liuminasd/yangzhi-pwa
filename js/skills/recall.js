@@ -32,11 +32,17 @@ const RecallSkill = {
         const factText = match[1].trim();
         if (factText.length < 3) break;
 
-        // 强制存储记忆
-        const result = await Facts.explicitAdd(factText);
-        const status = result.updated ? '已更新已有记忆' : '已记住';
+        try {
+          // 强制存储记忆
+          const result = await Facts.explicitAdd(factText);
+          const status = result.updated ? '已更新已有记忆' : '已记住';
 
-        return `用户让我记住："${factText}"\n\n我已经${status}了这条信息。请自然确认：${result.updated ? '已更新这条记忆，我会记得更牢了' : '好的，我已经记下了！'}并简单回应。`;
+          return `用户让我记住："${factText}"\n\n我已经${status}了这条信息。请自然确认：${result.updated ? '已更新这条记忆，我会记得更牢了' : '好的，我已经记下了！'}并简单回应。`;
+        } catch (e) {
+          // DB 写入失败时不阻塞消息发送，降级为让 AI 自然确认
+          console.warn('记忆写入失败', e);
+          return `用户让我记住："${factText}"\n\n请自然确认你收到了这条信息（注意：记忆存储暂时失败，但请照常回复）。`;
+        }
       }
     }
 
@@ -53,17 +59,22 @@ const RecallSkill = {
       const match = input.match(pattern);
       if (match) {
         const query = match[1].trim();
-        const results = await Facts.search(query, 5);
+        try {
+          const results = await Facts.search(query, 5);
 
-        if (results.length === 0) {
-          return `用户问："${input}"\n\n请回复：抱歉，我好像没有关于"${query}"的记忆。你可以告诉我，我会记住的！`;
+          if (results.length === 0) {
+            return `用户问："${input}"\n\n请回复：抱歉，我好像没有关于"${query}"的记忆。你可以告诉我，我会记住的！`;
+          }
+
+          const factsText = results
+            .map(f => `- [${Facts.CATEGORIES[f.category]?.label || '其他'}] ${f.fact}`)
+            .join('\n');
+
+          return `用户问："${input}"\n\n以下是我记住的相关信息：\n${factsText}\n\n请基于这些信息自然回答用户，像朋友回忆往事一样，不要像念数据库记录。`;
+        } catch (e) {
+          console.warn('记忆搜索失败', e);
+          return input; // 搜索失败时不修改用户输入，让 AI 自然回应
         }
-
-        const factsText = results
-          .map(f => `- [${Facts.CATEGORIES[f.category]?.label || '其他'}] ${f.fact}`)
-          .join('\n');
-
-        return `用户问："${input}"\n\n以下是我记住的相关信息：\n${factsText}\n\n请基于这些信息自然回答用户，像朋友回忆往事一样，不要像念数据库记录。`;
       }
     }
 

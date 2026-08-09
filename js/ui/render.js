@@ -123,14 +123,16 @@ const Render = {
 
   /**
    * 滚动到底部
+   * @param {boolean} force - 强制滚动（忽略用户手动上滑状态）
    */
-  scrollToBottom(el) {
+  scrollToBottom(el, force = false) {
     if (typeof el === 'string') el = this.$(el);
-    if (el) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-    }
+    if (!el) return;
+    // 检查用户是否手动上滑（距底部 > 80px 视为有意查看历史）
+    if (!force && el._userScrolledUp) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
   },
 
   /**

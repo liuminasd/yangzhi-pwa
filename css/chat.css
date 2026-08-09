@@ -98,6 +98,16 @@
   opacity: 1;
 }
 
+/* 日期分组标题 */
+.conv-date-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 10px 12px 4px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 /* --- 聊天窗口 --- */
 #chat-window {
   display: flex;
@@ -240,8 +250,9 @@
 /* --- 输入中动画 --- */
 #typing-indicator {
   display: flex;
-  gap: 4px;
-  padding: 8px 20px;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 20px;
 }
 #typing-indicator .dot {
   width: 7px;
@@ -252,6 +263,12 @@
 }
 #typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
 #typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+#typing-indicator .typing-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 4px;
+  animation: fadeIn 0.3s ease;
+}
 
 /* --- 输入区域 --- */
 #input-area {
@@ -325,14 +342,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform var(--transition), box-shadow var(--transition);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
 }
 #btn-send:active {
-  transform: scale(0.9);
+  transform: scale(0.88);
+}
+#btn-send.has-content {
+  box-shadow: 0 0 12px var(--accent-glow);
+  animation: sendPulse 2s ease-in-out infinite;
 }
 #btn-send:disabled {
   background: var(--text-muted);
   cursor: not-allowed;
+  box-shadow: none;
+  animation: none;
+}
+@keyframes sendPulse {
+  0%, 100% { box-shadow: 0 0 8px var(--accent-glow); }
+  50% { box-shadow: 0 0 18px rgba(20, 184, 166, 0.35); }
 }
 
 /* 聊天菜单下拉 */
