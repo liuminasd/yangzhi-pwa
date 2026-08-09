@@ -746,24 +746,56 @@ const ChatView = {
     footer.appendChild(Render.el('span', 'msg-time', {
       text: Security.formatTime(msg.timestamp),
     }));
-    footer.appendChild(Render.el('button', 'msg-copy-btn', {
-      text: '📋',
-      title: '复制',
-      onclick: () => {
-        navigator.clipboard.writeText(msg.content).then(() => {
-          Toast.success('已复制');
+    // 复制按钮 — 常显，带点击反馈
+    const copyBtn = Render.el('button', 'msg-copy-btn', {
+      text: '📋 复制',
+      title: '复制消息内容',
+      onclick: (e) => {
+        e.stopPropagation();
+        const text = msg.content;
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = '✅ 已复制';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.textContent = '📋 复制';
+            copyBtn.classList.remove('copied');
+          }, 1500);
+          // 复制内容预览（截取前30字）
+          const preview = text.length > 30 ? text.slice(0, 30) + '...' : text;
+          Toast.success(`已复制：${preview}`);
         }).catch(() => {
           // 降级方案
           const ta = document.createElement('textarea');
-          ta.value = msg.content;
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
           document.body.appendChild(ta);
+          ta.focus();
           ta.select();
-          document.execCommand('copy');
+          try {
+            document.execCommand('copy');
+            copyBtn.textContent = '✅ 已复制';
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+              copyBtn.textContent = '📋 复制';
+              copyBtn.classList.remove('copied');
+            }, 1500);
+            Toast.success('已复制');
+          } catch {
+            Toast.error('复制失败，请手动选择文本');
+          }
           ta.remove();
-          Toast.success('已复制');
         });
       },
-    }));
+    });
+    // AI 回复添加一键复制整段快捷键（双击气泡复制）
+    if (msg.role === 'assistant') {
+      bubble.addEventListener('dblclick', async (e) => {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        await navigator.clipboard.writeText(msg.content).then(() => {
+          Toast.success('已复制全部回复');
+        }).catch(() => Toast.error('复制失败'));
+      });
+    }
     bubble.appendChild(footer);
 
     row.appendChild(bubble);

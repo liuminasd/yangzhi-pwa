@@ -221,19 +221,28 @@
   padding: 0 4px;
 }
 .msg-copy-btn {
-  font-size: 13px;
-  opacity: 0;
-  transition: opacity var(--transition);
-  padding: 2px 4px;
-  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+  transition: opacity var(--transition), background var(--transition), color var(--transition);
+  padding: 3px 8px;
+  border-radius: 12px;
   cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 .msg-bubble:hover .msg-copy-btn {
-  opacity: 0.6;
+  opacity: 0.85;
 }
 .msg-copy-btn:hover {
   opacity: 1 !important;
   background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.msg-copy-btn.copied {
+  opacity: 1 !important;
+  background: var(--success);
+  color: #fff;
 }
 
 /* 技能标记 */
