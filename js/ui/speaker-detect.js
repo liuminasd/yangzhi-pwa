@@ -152,18 +152,20 @@ ${text}`;
    * @param {Array} segments - 解析结果
    * @returns {Promise<Array>} 用户确认后的结果
    */
-  async confirmWithUser(segments) {
+  async confirmWithUser(segments, options = {}) {
+    const { actionLabel = '确认并发送', maxPreview = 0 } = options;
     return new Promise((resolve) => {
       this._showConfirmDialog(segments, (confirmed) => {
         resolve(confirmed);
-      });
+      }, actionLabel, maxPreview);
     });
   },
 
   /**
    * 显示确认对话框
+   * @param {number} maxPreview - 最多显示的条目数，0=不限制
    */
-  _showConfirmDialog(segments, onConfirm) {
+  _showConfirmDialog(segments, onConfirm, actionLabel = '确认并发送', maxPreview = 0) {
     // 防止并发弹窗
     if (this._dialogOpen) {
       onConfirm(null);
@@ -213,6 +215,11 @@ ${text}`;
       box.innerHTML = '';
     };
 
+    const displaySegments = maxPreview > 0 ? currentSegments.slice(0, maxPreview) : currentSegments;
+    const truncated = maxPreview > 0 && currentSegments.length > maxPreview
+      ? `<p style="font-size:12px;color:var(--text-muted);margin:8px 0;">... 还有 ${currentSegments.length - maxPreview} 条消息未显示，确认后将全部导入</p>`
+      : '';
+
     box.innerHTML = `
       <h3>👥 识别到以下发言人</h3>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
@@ -220,14 +227,14 @@ ${text}`;
         点击发言人名称可修改，不确定的请手动确认。
       </p>
       <div class="speaker-confirm-list">
-        ${currentSegments.map((s, i) => `
+        ${displaySegments.map((s, i) => `
           <div class="speaker-confirm-item">
             <span class="speaker-badge ${s.confidence >= 0.7 ? 'confident' : 'uncertain'}">
               ${s.confidence >= 0.7 ? '🔵' : '⚠️'}
             </span>
             <input class="speaker-name-input"
                    value="${this._escAttr(s.speaker)}"
-                   data-index="${i}"
+                   data-index="${maxPreview > 0 ? i : i}"
                    style="width:${Math.max(60, s.speaker.length * 14)}px;">
             <span class="segment-content" style="flex:1;font-size:13px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
               ${this._escHtml(s.content.slice(0, 80))}
@@ -235,13 +242,14 @@ ${text}`;
           </div>
         `).join('')}
       </div>
+      ${truncated}
       <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn-primary" id="btn-speaker-cancel"
                 style="background:var(--bg-hover);color:var(--text-primary);">
           取消
         </button>
         <button class="btn-primary" id="btn-speaker-confirm">
-          ✅ 确认并发送
+          ✅ ${actionLabel}
         </button>
       </div>
     `;

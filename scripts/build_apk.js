@@ -47,9 +47,9 @@ async function main() {
     twaManifest.packageId = 'com.yangzhi.app';
     twaManifest.name = '仰止AI助手';
     twaManifest.launcherName = '仰止AI';
-    twaManifest.appVersionCode = 1;
-    twaManifest.appVersionName = '1.0.0';
-    twaManifest.fallbackType = 'customtabs';
+    twaManifest.appVersionCode = 3;
+    twaManifest.appVersionName = '1.2.0';  // 新增手机号登录+聊天记录导入
+    twaManifest.fallbackType = 'webview';  // 无地址栏，不跳转
     twaManifest.enableNotifications = false;
     twaManifest.enableSiteSettingsShortcut = true;
 

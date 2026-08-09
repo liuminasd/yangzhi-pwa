@@ -49,6 +49,18 @@ const App = {
       await DB.open();
       log('IndexedDB 初始化完成');
 
+      // 4b. 登录检查
+      const { default: Auth } = await import('./auth.js');
+      const user = await Auth.autoLogin();
+      if (!user) {
+        this.showLoginOverlay();
+        return; // 停止初始化，等用户登录
+      }
+      this._phoneSuffix = user.phone.slice(-4);
+      const titleEl = document.getElementById('top-title');
+      if (titleEl) titleEl.textContent = '仰止 · ' + this._phoneSuffix;
+      log('用户已登录:', user.phone.slice(-4));
+
       // 5. 执行记忆衰减维护
       if (Config.memory.decayDays > 0) {
         Facts.decayMaintenance(Config.memory.decayDays).then(removed => {
@@ -62,16 +74,8 @@ const App = {
         return; // 停止后续初始化，等用户配置完
       }
 
-      // 7. 初始化 UI 模块
-      await this.initUI();
-
-      // 8. 绑定 Tab 导航
-      this.bindNavigation();
-
-      // 9. 更新连接状态
-      this.updateConnectionStatus();
-
-      log('仰止 初始化完成');
+      // 7. 继续初始化（统一走 continueInit，含 newChat）
+      await this.continueInit();
     } catch (error) {
       console.error('初始化失败', error && error.message || error);
       Toast.error('应用初始化失败，请刷新页面');
@@ -115,7 +119,7 @@ const App = {
           page.classList.toggle('active', page.id === `tab-${tabName}`);
         });
 
-        // 更新顶部标题
+        // 更新顶部标题（保留登录用户的手机号后缀）
         const titles = {
           chat: '仰止',
           skills: '技能中心',
@@ -123,7 +127,13 @@ const App = {
           settings: '设置',
         };
         const titleEl = document.getElementById('top-title');
-        if (titleEl) titleEl.textContent = titles[tabName] || '仰止';
+        if (titleEl) {
+          let title = titles[tabName] || '仰止';
+          if (tabName === 'chat' && this._phoneSuffix) {
+            title = '仰止 · ' + this._phoneSuffix;
+          }
+          titleEl.textContent = title;
+        }
 
         // 切换到对应Tab时自动刷新
         if (tabName === 'memory') {
@@ -227,7 +237,13 @@ const App = {
 
       Toast.success('API Key 已保存！');
       // 继续初始化
-      await this.continueInit();
+      try {
+        await this.continueInit();
+      } catch (e) {
+        Toast.error(`初始化失败：${e.message || '请刷新页面重试'}`);
+        // 重新显示配置页以便用户重试
+        this.showSetupOverlay();
+      }
     };
 
     document.getElementById('btn-setup-save').addEventListener('click', saveAndContinue);
@@ -275,9 +291,168 @@ const App = {
   },
 
   /**
+   * 显示登录/注册页面
+   */
+  showLoginOverlay() {
+    // 隐藏正常 UI
+    document.getElementById('top-bar').style.display = 'none';
+    document.getElementById('bottom-nav').style.display = 'none';
+    document.getElementById('main-content').style.display = 'none';
+
+    // 创建登录浮层
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.innerHTML = `
+      <div id="auth-card">
+        <div class="auth-icon">🔐</div>
+        <h1>仰止AI</h1>
+        <p class="auth-subtitle">首次使用请注册，之后自动登录</p>
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-mode="login" id="tab-login">登录</button>
+          <button class="auth-tab" data-mode="register" id="tab-register">注册</button>
+        </div>
+        <input type="tel" id="auth-phone" class="auth-input" placeholder="手机号" maxlength="11" autocomplete="tel">
+        <input type="password" id="auth-password" class="auth-input" placeholder="密码（至少6位）" maxlength="32" autocomplete="new-password">
+        <div class="auth-error" id="auth-error"></div>
+        <button class="auth-submit" id="btn-auth-submit">登 录</button>
+        <div class="auth-hint" id="auth-mode-hint">
+          🔒 数据仅存储在本设备，不会上传到任何服务器
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // 状态
+    let mode = 'login'; // 'login' | 'register'
+
+    const phoneInput = document.getElementById('auth-phone');
+    const passwordInput = document.getElementById('auth-password');
+    const errorEl = document.getElementById('auth-error');
+    const submitBtn = document.getElementById('btn-auth-submit');
+    const modeHint = document.getElementById('auth-mode-hint');
+    const tabLogin = document.getElementById('tab-login');
+    const tabRegister = document.getElementById('tab-register');
+
+    // Tab 切换
+    const switchMode = (newMode) => {
+      mode = newMode;
+      if (mode === 'login') {
+        tabLogin.classList.add('active');
+        tabRegister.classList.remove('active');
+        submitBtn.textContent = '登 录';
+        modeHint.innerHTML = '🔒 数据仅存储在本设备，不会上传到任何服务器';
+      } else {
+        tabRegister.classList.add('active');
+        tabLogin.classList.remove('active');
+        submitBtn.textContent = '注 册';
+        modeHint.innerHTML = '📝 密码至少6位，用于保护你的数据安全';
+      }
+      errorEl.textContent = '';
+    };
+
+    tabLogin.addEventListener('click', () => switchMode('login'));
+    tabRegister.addEventListener('click', () => switchMode('register'));
+
+    // 提交
+    const doSubmit = async () => {
+      // 防止并发提交（快速连按 Enter 或同时点击按钮）
+      if (submitBtn.disabled) return;
+
+      // 去除手机号中的非数字字符（支持用户带格式粘贴，如 138-0000-1234）
+      const phone = phoneInput.value.replace(/\D/g, '');
+      const password = passwordInput.value;
+
+      // 客户端验证
+      const { default: Auth } = await import('./auth.js');
+      const phoneErr = Auth.validatePhone(phone);
+      if (phoneErr) {
+        errorEl.textContent = phoneErr;
+        phoneInput.focus();
+        return;
+      }
+      const pwErr = Auth.validatePassword(password);
+      if (pwErr) {
+        errorEl.textContent = pwErr;
+        passwordInput.focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '处理中...';
+      errorEl.textContent = '';
+
+      try {
+        if (mode === 'register') {
+          await Auth.register(phone, password);
+          Toast.success('注册成功！');
+        } else {
+          await Auth.login(phone, password);
+          Toast.success('登录成功！');
+        }
+
+        // 移除登录页
+        overlay.remove();
+
+        // 记录手机号后4位
+        const phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
+        this._phoneSuffix = phoneSuffix;
+
+        // 先检查是否需要 API Key（避免 UI 闪一下再被遮住）
+        if (!Config.isReady()) {
+          this.showSetupOverlay();
+          return;
+        }
+
+        // 恢复主 UI
+        document.getElementById('top-bar').style.display = '';
+        document.getElementById('bottom-nav').style.display = '';
+        document.getElementById('main-content').style.display = '';
+
+        const titleEl = document.getElementById('top-title');
+        if (titleEl) {
+          titleEl.textContent = '仰止 · ' + phoneSuffix;
+        }
+
+        // 继续初始化
+        await this.continueInit();
+      } catch (e) {
+        // overlay 已移除，用 Toast 显示错误并重新显示登录页
+        const hint = mode === 'register' ? '账号已创建，请登录重试' : '请重新登录';
+        Toast.error(`${hint}：${e.message || '未知错误'}`);
+        this.showLoginOverlay();
+      }
+    };
+
+    submitBtn.addEventListener('click', doSubmit);
+    passwordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSubmit();
+    });
+    phoneInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') passwordInput.focus();
+    });
+
+    // 自动聚焦
+    setTimeout(() => phoneInput.focus(), 300);
+  },
+
+  /**
    * 配置完 API Key 后继续初始化
    */
   async continueInit() {
+    // 设置手机号后缀到标题栏（自动登录路径）
+    const { default: Auth } = await import('./auth.js');
+    if (Auth.getCurrentUser()) {
+      this._phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
+      const titleEl = document.getElementById('top-title');
+      if (titleEl) titleEl.textContent = '仰止 · ' + this._phoneSuffix;
+    }
+
+    // 检查 API Key（新注册用户可能还没有配置）
+    if (!Config.isReady()) {
+      this.showSetupOverlay();
+      return;
+    }
+
     await this.initUI();
     this.bindNavigation();
     this.updateConnectionStatus();

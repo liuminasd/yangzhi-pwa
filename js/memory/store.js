@@ -4,7 +4,7 @@
 // ============================================
 
 const DB_NAME = 'chat-ai-assistant';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 class Store {
   constructor() {
@@ -53,6 +53,11 @@ class Store {
           const attStore = db.createObjectStore('attachments', { keyPath: 'id' });
           attStore.createIndex('conversationId', 'conversationId', { unique: false });
           attStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+
+        // v3: 用户表（手机号登录）
+        if (!db.objectStoreNames.contains('users')) {
+          db.createObjectStore('users', { keyPath: 'phone' });
         }
       };
 

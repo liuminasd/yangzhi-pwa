@@ -33,6 +33,8 @@ const ChatView = {
     this._initialized = true;
 
     this.bindEvents();
+    // 监听外部导入事件，自动刷新对话列表
+    window.addEventListener('refresh-conversations', () => this.loadConversations());
     await this.loadConversations();
 
     // 初始化 OCR（传递回调）

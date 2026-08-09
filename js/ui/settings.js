@@ -10,6 +10,9 @@ import ProfileSync from '../profile-sync.js';
 import Facts from '../memory/facts.js';
 import DB from '../memory/store.js';
 import MemoryBridge from '../memory/memory-bridge.js';
+import Auth from '../auth.js';
+import Conversations from '../memory/conversations.js';
+import SpeakerDetect from './speaker-detect.js';
 
 const SettingsPanel = {
   /**
@@ -172,6 +175,17 @@ const SettingsPanel = {
         </div>
       </div>
 
+      <!-- 账号管理 -->
+      <div class="setting-group">
+        <h3>👤 账号管理</h3>
+        <div class="setting-item">
+          <span>当前账号：<strong id="current-phone">${Auth.isLoggedIn() ? esc(Auth.getCurrentUser().phone) : '--'}</strong></span>
+        </div>
+        <div class="setting-item">
+          <button class="btn-danger" id="btn-logout">🚪 退出登录</button>
+        </div>
+      </div>
+
       <!-- ChromaDB 桥接 -->
       <div class="setting-group">
         <h3>🔗 claude-mem 桥接</h3>
@@ -189,7 +203,7 @@ const SettingsPanel = {
         </div>
       </div>
 
-      <input type="file" id="import-file" accept=".json" style="display:none">
+      <input type="file" id="import-file" accept=".json,.txt,.text" style="display:none">
     `;
 
     this.bindEvents();
@@ -285,58 +299,24 @@ const SettingsPanel = {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        const text = await file.text();
+        let text = await file.text();
+        // 去除 BOM（某些编辑器会在 UTF-8 文件头添加），统一在此处理
+        text = text.replace(/^﻿/, '');
         // 文件大小限制 50MB
         if (text.length > 50 * 1024 * 1024) throw new Error('文件过大（最大50MB）');
-        const data = JSON.parse(text);
 
-        // 结构化验证
-        if (!data.version) throw new Error('无效的数据格式：缺少版本号');
-        if (data.conversations && (!Array.isArray(data.conversations) || data.conversations.length > 10000))
-          throw new Error('对话数据异常');
-        if (data.messages && (!Array.isArray(data.messages) || data.messages.length > 100000))
-          throw new Error('消息数据异常');
-        if (data.facts && (!Array.isArray(data.facts) || data.facts.length > 50000))
-          throw new Error('记忆数据异常');
+        // 格式检测
+        const format = this._detectImportFormat(text, file.name);
 
-        // 验证关键字段
-        const validateMsgs = data.messages?.every(m => m.id && m.role && typeof m.content === 'string' && m.conversationId);
-        if (data.messages && !validateMsgs) throw new Error('消息数据格式异常');
-        const validateFacts = data.facts?.every(f => f.id && f.fact && f.category);
-        if (data.facts && !validateFacts) throw new Error('记忆数据格式异常');
-        // 长度限制
-        const longMsgs = data.messages?.filter(m => m.content.length > 100000);
-        if (longMsgs?.length > 0) throw new Error('存在超长消息内容');
-
-        if (!confirm(`即将导入 ${data.conversations?.length || 0} 个对话、${data.messages?.length || 0} 条消息、${data.facts?.length || 0} 条记忆。\n\n当前数据将被覆盖，确定继续？`)) return;
-
-        // 清空现有数据（原子性：任一步失败则中止导入，保护现有数据）
-        try {
-          await DB.clear('conversations');
-          await DB.clear('messages');
-          await DB.clear('facts');
-        } catch (clearErr) {
-          throw new Error(`清空旧数据失败，导入已中止：${clearErr.message}`);
+        if (format === 'json') {
+          // === JSON 备份导入（现有流程） ===
+          await this._importJSON(text);
+        } else if (format === 'wechat' || format === 'generic') {
+          // === 聊天文本导入 ===
+          await this._importChatText(text, format);
+        } else {
+          throw new Error('无法识别文件格式。支持：JSON备份(.json)、微信/QQ聊天文本(.txt)');
         }
-
-        // 批量导入（任一步失败则中止并提示）
-        try {
-          for (const conv of data.conversations || []) await DB.add('conversations', conv);
-        } catch (e) {
-          throw new Error(`导入对话失败（已清空旧数据，请刷新页面重试）：${e.message}`);
-        }
-        try {
-          for (const msg of data.messages || []) await DB.add('messages', msg);
-        } catch (e) {
-          throw new Error(`导入消息失败（已清空旧数据，请刷新页面重试）：${e.message}`);
-        }
-        try {
-          for (const fact of data.facts || []) await DB.add('facts', fact);
-        } catch (e) {
-          throw new Error(`导入记忆失败（已清空旧数据，请刷新页面重试）：${e.message}`);
-        }
-
-        Toast.success('数据导入成功！请刷新页面');
       } catch (e) {
         Toast.error(`导入失败：${e.message}`);
       }
@@ -345,17 +325,19 @@ const SettingsPanel = {
 
     // 清除所有数据
     Render.$('#btn-clear-all').addEventListener('click', async () => {
-      if (!confirm('⚠️ 确定清除所有数据？\n\n这将删除所有对话、消息和记忆。此操作不可撤销！')) return;
-      if (!confirm('再次确认：清除所有数据？')) return;
+      if (!confirm('⚠️ 确定清除所有数据？\n\n这将删除所有对话、消息、记忆和账号信息。此操作不可撤销！')) return;
+      if (!confirm('再次确认：清除所有数据（包括登录账号）？')) return;
 
       await DB.clear('conversations');
       await DB.clear('messages');
       await DB.clear('facts');
       await DB.clear('profile');
       await DB.clear('attachments');
+      await DB.clear('users');
       localStorage.removeItem('chat-ai-config');
       localStorage.removeItem('chat-ai-profile');
       localStorage.removeItem('chat-ai-profile-sync');
+      localStorage.removeItem('chat-ai-session');
       Toast.success('所有数据已清除。请刷新页面。');
     });
 
@@ -457,6 +439,136 @@ const SettingsPanel = {
         statusEl.textContent = `✅ 已同步 ${result.synced} 条记忆`;
       }
     });
+
+    // 退出登录
+    Render.$('#btn-logout').addEventListener('click', () => {
+      if (!confirm('确定要退出登录吗？\n\n退出后需要重新输入手机号和密码。')) return;
+      Auth.logout();
+    });
+  },
+
+  /**
+   * 检测导入文件格式
+   * @returns {'json'|'wechat'|'generic'|'unknown'}
+   */
+  _detectImportFormat(content, fileName) {
+    // JSON 备份：.json 文件始终按 JSON 处理，让 _importJSON 做验证
+    if (fileName.endsWith('.json')) {
+      try {
+        JSON.parse(content); // 只验证是否合法 JSON，不在这里判断结构
+        return 'json';
+      } catch {
+        return 'json'; // 非法 JSON 也让 _importJSON 抛出明确错误
+      }
+    }
+    // 微信导出特征：MM-DD HH:MM Name 或 YYYY年MM月DD日 HH:MM Name
+    if (/^\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}\s+\S+/m.test(content)) return 'wechat';
+    if (/^\d{4}年\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2}/m.test(content)) return 'wechat';
+    // 通用聊天特征：Name: content 或 Name：content（中英文冒号），1-20字符
+    if (/^[^\s:：]{1,20}[：:]\s*.+/m.test(content)) return 'generic';
+    return 'unknown';
+  },
+
+  /**
+   * JSON 备份导入
+   */
+  async _importJSON(text) {
+    const data = JSON.parse(text);
+
+    // 结构化验证
+    if (!data.version) throw new Error('无效的数据格式：缺少版本号');
+    if (data.conversations && (!Array.isArray(data.conversations) || data.conversations.length > 10000))
+      throw new Error('对话数据异常');
+    if (data.messages && (!Array.isArray(data.messages) || data.messages.length > 100000))
+      throw new Error('消息数据异常');
+    if (data.facts && (!Array.isArray(data.facts) || data.facts.length > 50000))
+      throw new Error('记忆数据异常');
+
+    // 验证关键字段
+    const validateMsgs = data.messages?.every(m => m.id && m.role && typeof m.content === 'string' && m.conversationId);
+    if (data.messages && !validateMsgs) throw new Error('消息数据格式异常');
+    const validateFacts = data.facts?.every(f => f.id && f.fact && f.category);
+    if (data.facts && !validateFacts) throw new Error('记忆数据格式异常');
+    const longMsgs = data.messages?.filter(m => m.content.length > 100000);
+    if (longMsgs?.length > 0) throw new Error('存在超长消息内容');
+
+    if (!confirm(`即将导入 ${data.conversations?.length || 0} 个对话、${data.messages?.length || 0} 条消息、${data.facts?.length || 0} 条记忆。\n\n当前数据将被覆盖，确定继续？`)) return;
+
+    // 清空现有数据（原子性：任一步失败则中止导入，保护现有数据）
+    try {
+      await DB.clear('conversations');
+      await DB.clear('messages');
+      await DB.clear('facts');
+      await DB.clear('attachments');
+    } catch (clearErr) {
+      throw new Error(`清空旧数据失败，导入已中止：${clearErr.message}`);
+    }
+
+    // 批量导入（任一步失败则中止并提示）
+    try {
+      for (const conv of data.conversations || []) await DB.add('conversations', conv);
+    } catch (e) {
+      throw new Error(`导入对话失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+    }
+    try {
+      for (const msg of data.messages || []) await DB.add('messages', msg);
+    } catch (e) {
+      throw new Error(`导入消息失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+    }
+    try {
+      for (const fact of data.facts || []) await DB.add('facts', fact);
+    } catch (e) {
+      throw new Error(`导入记忆失败（已清空旧数据，请刷新页面重试）：${e.message}`);
+    }
+
+    Toast.success('数据导入成功！请刷新页面');
+  },
+
+  /**
+   * 聊天文本导入（微信/QQ等）
+   */
+  async _importChatText(text, format) {
+    const label = format === 'wechat' ? '微信导出' : '聊天记录';
+
+    // 1. 使用 SpeakerDetect 解析
+    const result = SpeakerDetect.detect(text);
+
+    if (!result.segments || result.segments.length < 2) {
+      throw new Error(`未能从${label}中识别出发言人和消息。请确认文件内容格式正确。`);
+    }
+
+    // 2. 预览确认
+    const confirmed = await SpeakerDetect.confirmWithUser(result.segments, { actionLabel: '确认并导入', maxPreview: 200 });
+    if (!confirmed || confirmed.length === 0) {
+      Toast.info('已取消导入');
+      return;
+    }
+
+    // 3. 创建新对话
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const conv = await Conversations.create(`导入的${label} - ${dateStr}`);
+
+    // 4. 逐条写入消息（user 角色，带 senderName）
+    let imported = 0;
+    for (const seg of confirmed) {
+      if (!seg.content || !seg.content.trim()) continue;
+      await Conversations.addMessage(conv.id, 'user', seg.content.trim(), {
+        senderName: seg.speaker || '未知',
+      });
+      imported++;
+    }
+
+    if (imported === 0) {
+      // 没有有效消息，删除空对话
+      await Conversations.remove(conv.id);
+      throw new Error(`未能从${label}中提取到有效消息内容`);
+    }
+
+    Toast.success(`已导入 ${imported} 条消息到「${conv.title}」，可前往聊天页查看`);
+
+    // 通知 ChatView 刷新对话列表
+    window.dispatchEvent(new CustomEvent('refresh-conversations'));
   },
 
   /**
