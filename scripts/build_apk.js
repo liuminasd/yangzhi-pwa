@@ -40,8 +40,12 @@ async function main() {
 
     // 2. 从 web manifest 创建 TWA manifest
     log.info('正在获取 Web Manifest...');
-    const manifestUrl = 'https://liuminasd.github.io/yangzhi-pwa/manifest.json';
+    const manifestUrl = 'http://localhost:8080/manifest.json';
     const twaManifest = await TwaManifest.fromWebManifest(manifestUrl);
+
+    // 覆盖为生产环境地址（manifest 从本地获取仅为绕过 TLS 问题）
+    twaManifest.host = 'liuminasd.github.io';
+    twaManifest.startUrl = '/yangzhi-pwa/';
 
     // 3. 设置必要的字段
     twaManifest.packageId = 'com.yangzhi.app';

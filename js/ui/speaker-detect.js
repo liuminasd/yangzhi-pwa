@@ -234,7 +234,7 @@ ${text}`;
             </span>
             <input class="speaker-name-input"
                    value="${this._escAttr(s.speaker)}"
-                   data-index="${maxPreview > 0 ? i : i}"
+                   data-index="${i}"
                    style="width:${Math.max(60, s.speaker.length * 14)}px;">
             <span class="segment-content" style="flex:1;font-size:13px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
               ${this._escHtml(s.content.slice(0, 80))}

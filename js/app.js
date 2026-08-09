@@ -40,7 +40,7 @@ const App = {
       // 2b. 尝试从服务器拉取最新档案（后台静默）
       ProfileSync.autoPullOnStart().then(result => {
         if (result) log('远程档案同步成功');
-      });
+      }).catch(e => console.warn('远程档案同步失败', e));
 
       // 3. 应用主题
       this.applyTheme();
@@ -177,6 +177,10 @@ const App = {
    * 显示首次配置向导（无 API Key 时强制显示）
    */
   showSetupOverlay() {
+    // 移除可能存在的旧浮层（重试场景）
+    const existing = document.getElementById('setup-overlay');
+    if (existing) existing.remove();
+
     // 隐藏正常 UI
     document.getElementById('top-bar').style.display = 'none';
     document.getElementById('bottom-nav').style.display = 'none';
@@ -278,7 +282,6 @@ const App = {
         } else if (resp.status === 401 || resp.status === 403) {
           errorEl.textContent = '❌ API Key 无效，请检查';
         } else {
-          const err = await resp.text().catch(() => '');
           errorEl.textContent = `❌ 连接失败 (${resp.status})`;
         }
       } catch (e) {
@@ -294,6 +297,10 @@ const App = {
    * 显示登录/注册页面
    */
   showLoginOverlay() {
+    // 移除可能存在的旧浮层（登录失败重试场景）
+    const existing = document.getElementById('auth-overlay');
+    if (existing) existing.remove();
+
     // 隐藏正常 UI
     document.getElementById('top-bar').style.display = 'none';
     document.getElementById('bottom-nav').style.display = 'none';

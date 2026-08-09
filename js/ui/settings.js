@@ -257,7 +257,6 @@ const SettingsPanel = {
         if (resp.ok) {
           Toast.success('连接成功！');
         } else {
-          const err = await resp.text();
           Toast.error(`连接失败：${resp.status}`);
         }
       } catch (e) {
@@ -301,7 +300,7 @@ const SettingsPanel = {
       try {
         let text = await file.text();
         // 去除 BOM（某些编辑器会在 UTF-8 文件头添加），统一在此处理
-        text = text.replace(/^﻿/, '');
+        text = text.replace(/^\uFEFF/, '');
         // 文件大小限制 50MB
         if (text.length > 50 * 1024 * 1024) throw new Error('文件过大（最大50MB）');
 

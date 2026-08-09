@@ -29,9 +29,11 @@ const ProfileSync = {
   setRemoteURL(url) {
     this.remoteURL = url;
     try {
+      const saved = localStorage.getItem('chat-ai-profile-sync');
+      const data = saved ? JSON.parse(saved) : {};
       localStorage.setItem('chat-ai-profile-sync', JSON.stringify({
+        ...data,
         remoteURL: url,
-        lastSync: Date.now(),
       }));
     } catch (e) {
       console.warn('保存同步URL失败（存储可能已满）', e);

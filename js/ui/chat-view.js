@@ -660,7 +660,7 @@ const ChatView = {
     });
 
     // 发言人标签（外部聊天记录导入时显示）
-    if (msg.senderName && msg.role !== 'user' && msg.role !== 'assistant') {
+    if (msg.senderName) {
       bubble.appendChild(Render.el('div', 'msg-sender-label', {
         text: `👤 ${msg.senderName}`,
       }));
