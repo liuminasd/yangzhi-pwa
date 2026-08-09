@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.yangzhi.app",
+    "sha256_cert_fingerprints": [
+      "DE:DE:EC:39:B2:6D:D2:21:35:2D:27:E1:86:DB:95:78:22:F0:78:66:00:E3:D7:53:08:B5:E1:70:91:78:E6:EE"
+    ]
+  }
+}]
