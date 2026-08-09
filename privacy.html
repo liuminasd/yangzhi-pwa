@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仰止AI — 隐私政策</title>
+<style>
+  body { max-width:800px; margin:40px auto; padding:20px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.8; color:#333; }
+  h1 { color:#1a1a2e; border-bottom:2px solid #6366f1; padding-bottom:10px; }
+  h2 { color:#1a1a2e; margin-top:30px; }
+  .update { color:#999; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>仰止AI — 隐私政策</h1>
+<p class="update">更新日期：2026年8月9日</p>
+
+<h2>1. 数据收集</h2>
+<p>仰止AI 是本地优先的 PWA 应用。您的聊天记录、个人设置和记忆数据<strong>完全存储在本设备</strong>（IndexedDB / localStorage），不会自动上传到任何服务器。</p>
+
+<h2>2. API 调用</h2>
+<p>当您发送消息时，应用会将消息内容发送到您配置的 AI API 端点（如 DeepSeek API）以获取回复。在此过程中：</p>
+<ul>
+  <li>仅发送当前对话上下文，不包含设备标识</li>
+  <li>API Key 仅存储在本设备本地存储中</li>
+  <li>不经过本应用的任何中间服务器</li>
+</ul>
+
+<h2>3. 数据导出与删除</h2>
+<p>您可以在设置中导出全部数据（支持 AES-256-GCM 加密），也可以随时清除所有本地数据，操作不可逆。</p>
+
+<h2>4. 第三方服务</h2>
+<ul>
+  <li>Tesseract.js OCR 引擎按需从 CDN 加载，仅处理您主动上传的图片，处理后文本仅存储于本地</li>
+  <li>应用使用 Service Worker 缓存静态资源以支持离线使用</li>
+</ul>
+
+<h2>5. 权限说明</h2>
+<ul>
+  <li>网络访问：用于调用 AI API 和加载 OCR 引擎</li>
+  <li>存储：用于本地数据持久化和离线缓存</li>
+  <li>不请求摄像头、麦克风、位置、通讯录等敏感权限</li>
+</ul>
+
+<h2>6. 儿童隐私</h2>
+<p>本应用不面向 13 岁以下儿童，不会有意收集儿童个人信息。</p>
+
+<h2>7. 联系我们</h2>
+<p>如有隐私相关问题，请通过 GitHub Issues 联系：<br>
+<a href="https://github.com/liuminasd/yangzhi-pwa/issues">github.com/liuminasd/yangzhi-pwa/issues</a></p>
+</body>
+</html>
