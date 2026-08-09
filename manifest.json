@@ -1,6 +1,6 @@
 {
-  "name": "仰止",
-  "short_name": "仰止",
+  "name": "仰止AI助手",
+  "short_name": "仰止AI",
   "description": "有记忆、有温度的 AI 伙伴",
   "start_url": "./",
   "display": "standalone",
