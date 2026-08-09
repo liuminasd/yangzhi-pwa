@@ -182,6 +182,13 @@ const SettingsPanel = {
         <span class="setting-hint" id="chroma-status"></span>
       </div>
 
+      <div class="setting-group">
+        <h3>📜 法律信息</h3>
+        <div class="setting-item">
+          <a href="./privacy.html" target="_blank" class="btn-primary" style="text-decoration:none;text-align:center;display:block;">🔒 隐私政策</a>
+        </div>
+      </div>
+
       <input type="file" id="import-file" accept=".json" style="display:none">
     `;
 
