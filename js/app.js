@@ -23,6 +23,7 @@ import SkillPanel from './ui/skill-panel.js';
 import MemoryView from './ui/memory-view.js';
 import SettingsPanel from './ui/settings.js';
 import Toast from './ui/toast.js';
+import Registry from './skills/registry.js';
 
 const App = {
   async init() {
@@ -459,6 +460,9 @@ const App = {
       this.showSetupOverlay();
       return;
     }
+
+    // 激活所有技能（常驻 systemPrompt + preprocess 链）
+    Registry.activateAll();
 
     await this.initUI();
     this.bindNavigation();

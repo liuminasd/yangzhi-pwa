@@ -396,16 +396,8 @@ const ChatView = {
     this._setSendButtonMode('stop');
 
     try {
-      // 检测技能触发
-      const triggeredSkills = Registry.detectTriggers(content);
-      for (const skillId of triggeredSkills) {
-        if (!Registry.isActive(skillId)) {
-          Registry.activate(skillId);
-          this._updateActiveSkillChips();
-        }
-      }
-
-      // 预处理
+      // 所有技能已由 Registry.activateAll() 自动激活，无需触发词检测
+      // 预处理：所有活跃技能的 preprocess 链
       let processedContent = content;
       for (const skill of Registry.getActive()) {
         if (skill.preprocess) {
@@ -455,7 +447,7 @@ const ChatView = {
       // 发送到 API
       this.streamBuffer = '';
 
-      const stream = API.sendMessage(context, {
+      const stream = await API.sendMessage(context, {
         stream: true,
       });
 

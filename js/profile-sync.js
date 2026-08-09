@@ -85,6 +85,17 @@ const ProfileSync = {
         throw new Error(`服务器返回 ${resp.status}`);
       }
 
+      // 验证响应是 JSON 格式（防止误将 HTML/MD 等当 JSON 解析）
+      const contentType = resp.headers.get('Content-Type') || '';
+      if (!contentType.includes('application/json') && !contentType.includes('text/plain')) {
+        // 尝试解析，但 Content-Type 不匹配时先做预检
+        const text = await resp.text();
+        if (!text.trim().startsWith('{') && !text.trim().startsWith('[')) {
+          throw new Error('远程文件不是有效的 JSON 格式（可能是 Markdown 或 HTML 页面）');
+        }
+        return JSON.parse(text);
+      }
+
       const data = await resp.json();
 
       // 验证格式

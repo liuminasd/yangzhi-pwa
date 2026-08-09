@@ -116,6 +116,15 @@ class SkillRegistry {
   }
 
   /**
+   * 激活所有已注册技能
+   */
+  activateAll() {
+    for (const id of this.skills.keys()) {
+      this.activeIds.add(id);
+    }
+  }
+
+  /**
    * 构建所有激活技能的系统提示词
    */
   buildSystemPrompt() {
