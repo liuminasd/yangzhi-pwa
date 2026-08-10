@@ -359,6 +359,18 @@ const ChatView = {
    * 打开对话
    */
   async openChat(convId) {
+    // 如果正在流式输出且用户切换到不同对话，先停止当前流
+    if (this.isStreaming && this._streamingConvId && this._streamingConvId !== convId) {
+      this.stopGeneration();
+      // 等待保存完成（最多1.5秒）
+      await new Promise(r => setTimeout(r, 100));
+      let waited = 0;
+      while (this._savingInProgress && waited < 1500) {
+        await new Promise(r => setTimeout(r, 50));
+        waited += 50;
+      }
+    }
+
     this.currentConvId = convId;
 
     // 移动端：隐藏对话列表，显示聊天窗口
@@ -445,20 +457,8 @@ const ChatView = {
     // ★ 提前设置流式标志，防止快速双击发送两条消息
     this.isStreaming = true;
 
-    // 确保有当前对话
-    if (!this.currentConvId) {
-      const conv = await Conversations.create();
-      await this.loadConversations();
-      this.currentConvId = conv.id;
-      if (window.innerWidth < 768) {
-        Render.$('#conv-list').classList.add('hidden');
-        Render.$('#chat-window').classList.remove('hidden');
-      }
-      Render.$('#chat-title').textContent = conv.title;
-    }
-
     // ★ 提前捕获当前对话ID，确保 try/catch 都能访问，停止时也能正确保存
-    const activeConvId = this.currentConvId;
+    let activeConvId = this.currentConvId;
     this._streamingConvId = activeConvId;
 
     input.value = '';
@@ -471,6 +471,19 @@ const ChatView = {
     this._setSendButtonMode('stop');
 
     try {
+      // 确保有当前对话（放 try 内防止 DB 错误导致 isStreaming 卡死）
+      if (!activeConvId) {
+        const conv = await Conversations.create();
+        await this.loadConversations();
+        this.currentConvId = conv.id;
+        activeConvId = conv.id;
+        this._streamingConvId = conv.id;
+        if (window.innerWidth < 768) {
+          Render.$('#conv-list').classList.add('hidden');
+          Render.$('#chat-window').classList.remove('hidden');
+        }
+        Render.$('#chat-title').textContent = conv.title;
+      }
       // 所有技能已由 Registry.activateAll() 自动激活，无需触发词检测
       // 预处理：统一通过 Registry.preprocess() 链式处理用户输入
       const processedContent = await Registry.preprocess(content);
@@ -591,8 +604,8 @@ const ChatView = {
       this._setSendButtonMode('send');
       Render.$('#user-input').focus();
 
-      // 刷新对话列表
-      await this.loadConversations();
+      // 刷新对话列表（失败不阻塞，避免未处理异常）
+      try { await this.loadConversations(); } catch {}
     }
   },
 

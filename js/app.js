@@ -19,6 +19,7 @@ import DB from './memory/store.js';
 import Facts from './memory/facts.js';
 import Conversations from './memory/conversations.js';
 import ChatView from './ui/chat-view.js';
+import CopyManager from './ui/copy.js';
 import SkillPanel from './ui/skill-panel.js';
 import MemoryView from './ui/memory-view.js';
 import SettingsPanel from './ui/settings.js';
@@ -110,6 +111,11 @@ const App = {
     navBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const tabName = btn.dataset.tab;
+
+        // 切换到非聊天 Tab 时自动退出多选模式
+        if (tabName !== 'chat' && CopyManager.mode === 'select') {
+          CopyManager.exitSelectMode();
+        }
 
         // 更新按钮状态
         navBtns.forEach(b => b.classList.remove('active'));
