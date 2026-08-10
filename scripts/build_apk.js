@@ -51,8 +51,8 @@ async function main() {
     twaManifest.packageId = 'com.yangzhi.app';
     twaManifest.name = '仰止AI助手';
     twaManifest.launcherName = '仰止AI';
-    twaManifest.appVersionCode = 3;
-    twaManifest.appVersionName = '1.2.0';  // 新增手机号登录+聊天记录导入
+    twaManifest.appVersionCode = 4;
+    twaManifest.appVersionName = '1.3.4';  // 第7轮Bug修复：多选退出+流式切换+异常边界
     twaManifest.fallbackType = 'webview';  // 无地址栏，不跳转
     twaManifest.enableNotifications = false;
     twaManifest.enableSiteSettingsShortcut = true;
@@ -158,13 +158,8 @@ org.gradle.jvmargs=-Xmx2048m`;
         fs.writeFileSync(gradlePropsPath2, gradleProps2);
     }
 
-    // 跳过代码混淆以加快构建（TWA 无需 R8）
-    const gradlePropsPath3 = path.join(PROJECT_DIR, 'gradle.properties');
-    let gradleProps3 = fs.readFileSync(gradlePropsPath3, 'utf8');
-    if (!gradleProps3.includes('android.enableR8')) {
-        gradleProps3 += '\nandroid.enableR8=false\n';
-        fs.writeFileSync(gradlePropsPath3, gradleProps3);
-    }
+    // R8 已通过 build.gradle 中 minifyEnabled false 禁用（TWA 无需混淆）
+    // 注意：不再写 android.enableR8=false（AGP 7.0+ 已移除此属性）
 
     execSync(`"${gradleExe}" assembleRelease --stacktrace --no-daemon`, {
         cwd: PROJECT_DIR,
@@ -180,7 +175,7 @@ org.gradle.jvmargs=-Xmx2048m`;
         const apkFiles = fs.readdirSync(apkDir).filter(f => f.endsWith('.apk'));
         for (const apk of apkFiles) {
             const src = path.join(apkDir, apk);
-            const dest = path.join(OUTPUT_DIR, '仰止AI-v1.0.0.apk');
+            const dest = path.join(OUTPUT_DIR, '仰止AI-v1.3.4.apk');
             fs.copyFileSync(src, dest);
             const sizeMB = (fs.statSync(dest).size / (1024 * 1024)).toFixed(2);
             log.info(`[SUCCESS] APK已生成: ${dest} (${sizeMB} MB)`);
