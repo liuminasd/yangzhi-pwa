@@ -200,6 +200,20 @@ const ChatView = {
       const distFromBottom = msgList.scrollHeight - msgList.scrollTop - msgList.clientHeight;
       msgList._userScrolledUp = distFromBottom > 80;
     });
+
+    // 移动端键盘处理：键盘弹起时滚动输入框到可见区域
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        const viewport = window.visualViewport;
+        const inputArea = document.getElementById('input-area');
+        if (!inputArea || document.getElementById('chat-window').classList.contains('hidden')) return;
+        // 键盘弹起时，确保输入区域在可视范围内
+        const inputBottom = inputArea.getBoundingClientRect().bottom;
+        if (inputBottom > viewport.height) {
+          msgList.scrollTop += inputBottom - viewport.height + 8;
+        }
+      });
+    }
   },
 
   /**
@@ -327,12 +341,18 @@ const ChatView = {
   },
 
   /**
-   * 新建对话
+   * 新建对话（防止快速双击创建多个空对话）
    */
   async newChat() {
-    const conv = await Conversations.create();
-    await this.loadConversations();
-    this.openChat(conv.id);
+    if (this._creatingConv) return;
+    this._creatingConv = true;
+    try {
+      const conv = await Conversations.create();
+      await this.loadConversations();
+      this.openChat(conv.id);
+    } finally {
+      this._creatingConv = false;
+    }
   },
 
   /**

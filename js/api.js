@@ -72,9 +72,27 @@ class ApiClient {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    // 每次 read 的超时（毫秒）— 防止服务端暂停导致无限挂起
+    const READ_TIMEOUT = 30000;
+
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        // 竞速：read vs 超时
+        let result;
+        try {
+          result = await Promise.race([
+            reader.read(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Stream read timeout')), READ_TIMEOUT)
+            ),
+          ]);
+        } catch (e) {
+          if (e.message === 'Stream read timeout') {
+            yield { type: 'error', error: '响应超时，服务端可能已断开' };
+          }
+          break;
+        }
+        const { done, value } = result;
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
