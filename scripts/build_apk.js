@@ -158,11 +158,19 @@ org.gradle.jvmargs=-Xmx2048m`;
         fs.writeFileSync(gradlePropsPath2, gradleProps2);
     }
 
+    // 跳过代码混淆以加快构建（TWA 无需 R8）
+    const gradlePropsPath3 = path.join(PROJECT_DIR, 'gradle.properties');
+    let gradleProps3 = fs.readFileSync(gradlePropsPath3, 'utf8');
+    if (!gradleProps3.includes('android.enableR8')) {
+        gradleProps3 += '\nandroid.enableR8=false\n';
+        fs.writeFileSync(gradlePropsPath3, gradleProps3);
+    }
+
     execSync(`"${gradleExe}" assembleRelease --stacktrace --no-daemon`, {
         cwd: PROJECT_DIR,
         env: buildEnv,
         stdio: 'inherit',
-        timeout: 600000,
+        timeout: 1800000, // 30 分钟超时
     });
     log.info('  Gradle 构建完成');
 
