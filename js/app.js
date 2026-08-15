@@ -105,6 +105,9 @@ const App = {
    * 绑定底部导航
    */
   bindNavigation() {
+    if (this._navBound) return;
+    this._navBound = true;
+
     const navBtns = document.querySelectorAll('.nav-btn');
     const tabPages = document.querySelectorAll('.tab-page');
 
@@ -247,13 +250,13 @@ const App = {
       document.getElementById('main-content').style.display = '';
 
       Toast.success('API Key 已保存！');
-      // 继续初始化
+      // 继续初始化（API Key 与 session 均已保存，失败时刷新让 autoLogin 接管）
       try {
         await this.continueInit();
       } catch (e) {
-        Toast.error(`初始化失败：${e.message || '请刷新页面重试'}`);
-        // 重新显示配置页以便用户重试
-        this.showSetupOverlay();
+        console.error('配置后初始化失败', e);
+        Toast.error('初始化失败，正在刷新…');
+        setTimeout(() => window.location.reload(), 800);
       }
     };
 
@@ -395,6 +398,7 @@ const App = {
       submitBtn.textContent = '处理中...';
       errorEl.textContent = '';
 
+      // 第一步：认证（失败时保留当前登录页和输入，直接显示错误）
       try {
         if (mode === 'register') {
           await Auth.register(phone, password);
@@ -403,37 +407,45 @@ const App = {
           await Auth.login(phone, password);
           Toast.success('登录成功！');
         }
+      } catch (e) {
+        // 认证失败：不重建浮层（避免"反复弹出"），保留用户输入供修正
+        submitBtn.disabled = false;
+        submitBtn.textContent = mode === 'register' ? '注 册' : '登 录';
+        errorEl.textContent = e.message || '操作失败，请重试';
+        return;
+      }
 
-        // 移除登录页
-        overlay.remove();
+      // 认证成功：移除登录页
+      overlay.remove();
 
-        // 记录手机号后4位
-        const phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
-        this._phoneSuffix = phoneSuffix;
+      // 记录手机号后4位
+      const phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
+      this._phoneSuffix = phoneSuffix;
 
-        // 先检查是否需要 API Key（避免 UI 闪一下再被遮住）
-        if (!Config.isReady()) {
-          this.showSetupOverlay();
-          return;
-        }
+      // 先检查是否需要 API Key（避免 UI 闪一下再被遮住）
+      if (!Config.isReady()) {
+        this.showSetupOverlay();
+        return;
+      }
 
-        // 恢复主 UI
-        document.getElementById('top-bar').style.display = '';
-        document.getElementById('bottom-nav').style.display = '';
-        document.getElementById('main-content').style.display = '';
+      // 恢复主 UI
+      document.getElementById('top-bar').style.display = '';
+      document.getElementById('bottom-nav').style.display = '';
+      document.getElementById('main-content').style.display = '';
 
-        const titleEl = document.getElementById('top-title');
-        if (titleEl) {
-          titleEl.textContent = '仰止 · ' + phoneSuffix;
-        }
+      const titleEl = document.getElementById('top-title');
+      if (titleEl) {
+        titleEl.textContent = '仰止 · ' + phoneSuffix;
+      }
 
-        // 继续初始化
+      // 第二步：初始化。session 已保存，失败时刷新让 autoLogin 接管，而非重新弹登录页
+      try {
         await this.continueInit();
       } catch (e) {
-        // overlay 已移除，用 Toast 显示错误并重新显示登录页
-        const hint = mode === 'register' ? '账号已创建，请登录重试' : '请重新登录';
-        Toast.error(`${hint}：${e.message || '未知错误'}`);
-        this.showLoginOverlay();
+        console.error('登录后初始化失败', e);
+        Toast.error('初始化失败，正在刷新…');
+        // 刷新后 autoLogin 通过已保存的 session 自动登录，重新走完整初始化流程
+        setTimeout(() => window.location.reload(), 800);
       }
     };
 
@@ -451,32 +463,47 @@ const App = {
 
   /**
    * 配置完 API Key 后继续初始化
+   * 防重入：初始化是幂等的，完成后不再重复执行（避免重复绑定事件/重复新建对话）
    */
   async continueInit() {
-    // 设置手机号后缀到标题栏（自动登录路径）
-    const { default: Auth } = await import('./auth.js');
-    if (Auth.getCurrentUser()) {
-      this._phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
-      const titleEl = document.getElementById('top-title');
-      if (titleEl) titleEl.textContent = '仰止 · ' + this._phoneSuffix;
+    if (this._initDone) return;
+    if (this._initInProgress) return;
+    this._initInProgress = true;
+
+    try {
+      // 设置手机号后缀到标题栏（自动登录路径）
+      const { default: Auth } = await import('./auth.js');
+      if (Auth.getCurrentUser()) {
+        this._phoneSuffix = Auth.getCurrentUser().phone.slice(-4);
+        const titleEl = document.getElementById('top-title');
+        if (titleEl) titleEl.textContent = '仰止 · ' + this._phoneSuffix;
+      }
+
+      // 检查 API Key（新注册用户可能还没有配置）
+      if (!Config.isReady()) {
+        this.showSetupOverlay();
+        return;
+      }
+
+      // 激活所有技能（常驻 systemPrompt + preprocess 链）
+      Registry.activateAll();
+
+      await this.initUI();
+      this.bindNavigation();
+      this.updateConnectionStatus();
+
+      // 打开一个欢迎对话
+      const { default: ChatView } = await import('./ui/chat-view.js');
+      await ChatView.newChat();
+
+      this._initDone = true;
+    } catch (e) {
+      // 初始化失败：重置标志，允许刷新后重试
+      console.error('初始化失败', e);
+      throw e;
+    } finally {
+      this._initInProgress = false;
     }
-
-    // 检查 API Key（新注册用户可能还没有配置）
-    if (!Config.isReady()) {
-      this.showSetupOverlay();
-      return;
-    }
-
-    // 激活所有技能（常驻 systemPrompt + preprocess 链）
-    Registry.activateAll();
-
-    await this.initUI();
-    this.bindNavigation();
-    this.updateConnectionStatus();
-
-    // 打开一个欢迎对话
-    const { default: ChatView } = await import('./ui/chat-view.js');
-    await ChatView.newChat();
   },
 
   updateConnectionStatus() {
