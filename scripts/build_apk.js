@@ -51,8 +51,8 @@ async function main() {
     twaManifest.packageId = 'com.yangzhi.app';
     twaManifest.name = '仰止AI助手';
     twaManifest.launcherName = '仰止AI';
-    twaManifest.appVersionCode = 4;
-    twaManifest.appVersionName = '1.3.4';  // 第7轮Bug修复：多选退出+流式切换+异常边界
+    twaManifest.appVersionCode = 5;
+    twaManifest.appVersionName = '1.3.5';  // 修复注册页面反复弹出
     twaManifest.fallbackType = 'webview';  // 无地址栏，不跳转
     twaManifest.enableNotifications = false;
     twaManifest.enableSiteSettingsShortcut = true;
@@ -175,7 +175,7 @@ org.gradle.jvmargs=-Xmx2048m`;
         const apkFiles = fs.readdirSync(apkDir).filter(f => f.endsWith('.apk'));
         for (const apk of apkFiles) {
             const src = path.join(apkDir, apk);
-            const dest = path.join(OUTPUT_DIR, '仰止AI-v1.3.4.apk');
+            const dest = path.join(OUTPUT_DIR, '仰止AI-v1.3.5.apk');
             fs.copyFileSync(src, dest);
             const sizeMB = (fs.statSync(dest).size / (1024 * 1024)).toFixed(2);
             log.info(`[SUCCESS] APK已生成: ${dest} (${sizeMB} MB)`);
